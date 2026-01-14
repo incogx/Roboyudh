@@ -387,10 +387,24 @@ export async function createPayment(teamId: string, amount: number): Promise<Pay
  * Update payment status (admin only - will be enforced by RLS)
  */
 export async function updatePaymentStatus(teamId: string, status: 'paid' | 'unpaid', paymentRef?: string): Promise<Payment> {
+  // Get the most recent payment for this team
+  const { data: payments, error: fetchError } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (fetchError) throw new Error(`Failed to fetch payment: ${fetchError.message}`);
+  if (!payments || payments.length === 0) throw new Error('No payment found for this team');
+
+  const paymentId = payments[0].id;
+
+  // Update the specific payment by ID
   const { data, error } = await supabase
     .from('payments')
     .update({ status, payment_ref: paymentRef })
-    .eq('team_id', teamId)
+    .eq('id', paymentId)
     .select()
     .single();
 

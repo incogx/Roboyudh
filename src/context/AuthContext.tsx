@@ -59,8 +59,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       options: {
         shouldCreateUser: true,
-        // Don't use emailRedirectTo - this forces magic link
-        // We want OTP codes that user types in manually
+        // Force email OTP (6-digit code) - no magic links
+        emailRedirectTo: undefined,
       },
     });
     return { error };
