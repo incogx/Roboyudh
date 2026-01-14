@@ -9,13 +9,19 @@ export default async function handler(req: any, res: any) {
 
     const { action, teamId, eventName, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    // Validate env
-    const SUPABASE_URL = process.env.SUPABASE_URL;
+    // Validate env - Use VITE_ prefixed versions since they're set in Vercel
+    const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
     const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+    const RAZORPAY_KEY_ID = process.env.VITE_RAZORPAY_KEY_ID;
 
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !RAZORPAY_KEY_SECRET || !RAZORPAY_KEY_ID) {
+      console.log('[INIT] Missing env vars:', {
+        SUPABASE_URL: !!SUPABASE_URL,
+        SERVICE_ROLE_KEY: !!SERVICE_ROLE_KEY,
+        RAZORPAY_KEY_SECRET: !!RAZORPAY_KEY_SECRET,
+        RAZORPAY_KEY_ID: !!RAZORPAY_KEY_ID
+      });
       return res.status(500).json({ success: false, error: 'Server misconfigured' });
     }
 
