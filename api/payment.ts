@@ -55,11 +55,11 @@ async function fetchRazorpayPayment(
 
 export default async function handler(req: any, res: any) {
   try {
-    // STEP 1: Validate environment variables
-    const SUPABASE_URL = process.env.SUPABASE_URL;
+    // STEP 1: Validate environment variables (use VITE_ prefix as set in Vercel)
+    const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
     const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+    const RAZORPAY_KEY_ID = process.env.VITE_RAZORPAY_KEY_ID;
 
     console.log('🔍 PAYMENT API REQUEST');
     console.log('ENV CHECK:', {
