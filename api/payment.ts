@@ -2,27 +2,34 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  throw new Error('Server misconfigured: missing Supabase service role credentials');
-}
-
-if (!RAZORPAY_KEY_SECRET) {
-  throw new Error('Server misconfigured: missing Razorpay key secret');
-}
-
-const adminSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-// Initialize Razorpay with LIVE credentials
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: RAZORPAY_KEY_SECRET,
-});
-
 export default async function handler(req: any, res: any) {
+  // Check environment variables at request time
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    return res.status(500).json({
+      success: false,
+      error: 'Server misconfigured: missing Supabase credentials',
+    });
+  }
+
+  if (!RAZORPAY_KEY_SECRET || !RAZORPAY_KEY_ID) {
+    return res.status(500).json({
+      success: false,
+      error: 'Server misconfigured: missing Razorpay credentials',
+    });
+  }
+
+  const adminSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // Initialize Razorpay with LIVE credentials
+  const razorpay = new Razorpay({
+    key_id: RAZORPAY_KEY_ID,
+    key_secret: RAZORPAY_KEY_SECRET,
+  });
   if (req.method === 'POST') {
     const { action } = req.body;
 
