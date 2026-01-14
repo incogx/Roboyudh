@@ -24,6 +24,8 @@ export default async function handler(req: any, res: any) {
     // CREATE ORDER
     if (action === 'create-order') {
       try {
+        console.log('[CREATE ORDER] Starting...');
+        
         const { data: team, error } = await adminSupabase
           .from('teams')
           .select('team_size,events(price_per_head)')
@@ -31,12 +33,16 @@ export default async function handler(req: any, res: any) {
           .single();
 
         if (error || !team) {
+          console.log('[CREATE ORDER] Team not found:', error);
           return res.status(400).json({ success: false, error: 'Team not found' });
         }
 
         const amount = Math.round(team.events.price_per_head * team.team_size * 100);
+        console.log('[CREATE ORDER] Amount calculated:', amount);
 
         const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+        console.log('[CREATE ORDER] Auth header length:', auth.length);
+        
         const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
           method: 'POST',
           headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
@@ -48,11 +54,27 @@ export default async function handler(req: any, res: any) {
           }),
         });
 
-        const orderData = await orderRes.json();
-        if (!orderRes.ok) {
-          return res.status(500).json({ success: false, error: 'Razorpay error' });
+        console.log('[CREATE ORDER] Razorpay response status:', orderRes.status);
+        
+        const contentType = orderRes.headers.get('content-type');
+        console.log('[CREATE ORDER] Content-Type:', contentType);
+        
+        const responseText = await orderRes.text();
+        console.log('[CREATE ORDER] Response text length:', responseText.length);
+        
+        if (!contentType?.includes('application/json')) {
+          console.log('[CREATE ORDER] Non-JSON response:', responseText.substring(0, 100));
+          return res.status(500).json({ success: false, error: 'Invalid response format from payment gateway' });
         }
 
+        const orderData = JSON.parse(responseText);
+        
+        if (!orderRes.ok) {
+          console.log('[CREATE ORDER] Razorpay error:', orderData);
+          return res.status(500).json({ success: false, error: orderData.description || 'Razorpay error' });
+        }
+
+        console.log('[CREATE ORDER] Order created:', orderData.id);
         return res.status(200).json({ 
           success: true, 
           orderId: orderData.id, 
@@ -60,19 +82,25 @@ export default async function handler(req: any, res: any) {
           currency: orderData.currency 
         });
       } catch (err: any) {
-        return res.status(500).json({ success: false, error: err.message });
+        console.log('[CREATE ORDER] Exception:', err.message);
+        return res.status(500).json({ success: false, error: `Exception: ${err.message}` });
       }
     }
 
     // VERIFY PAYMENT
     if (action === 'verify-payment') {
       try {
+        console.log('[VERIFY] Starting verification...');
+        
         const body = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSig = crypto.createHmac('sha256', RAZORPAY_KEY_SECRET).update(body).digest('hex');
 
         if (expectedSig !== razorpay_signature) {
+          console.log('[VERIFY] Signature mismatch');
           return res.status(400).json({ success: false, error: 'Invalid signature' });
         }
+
+        console.log('[VERIFY] Signature valid, fetching payment details...');
 
         // Fetch payment to verify
         const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
@@ -81,10 +109,17 @@ export default async function handler(req: any, res: any) {
           headers: { 'Authorization': `Basic ${auth}` },
         });
 
-        const payment = await payRes.json();
+        console.log('[VERIFY] Razorpay payment response status:', payRes.status);
+        
+        const paymentText = await payRes.text();
+        const payment = JSON.parse(paymentText);
+        
         if (!payRes.ok || payment.status !== 'captured') {
+          console.log('[VERIFY] Payment not captured:', payment.status);
           return res.status(400).json({ success: false, error: 'Payment not captured' });
         }
+
+        console.log('[VERIFY] Payment verified, updating database...');
 
         // Update payment in DB
         const { data: payments } = await adminSupabase
@@ -95,6 +130,7 @@ export default async function handler(req: any, res: any) {
           .limit(1);
 
         if (!payments?.length) {
+          console.log('[VERIFY] Payment record not found');
           return res.status(400).json({ success: false, error: 'Payment record not found' });
         }
 
@@ -102,6 +138,8 @@ export default async function handler(req: any, res: any) {
           .from('payments')
           .update({ status: 'paid', payment_ref: razorpay_payment_id })
           .eq('id', payments[0].id);
+
+        console.log('[VERIFY] Payment updated, creating ticket...');
 
         // Create ticket
         const ticketRes = await adminSupabase
@@ -111,9 +149,11 @@ export default async function handler(req: any, res: any) {
           .single();
 
         if (ticketRes.error) {
+          console.log('[VERIFY] Ticket creation error:', ticketRes.error);
           return res.status(500).json({ success: false, error: 'Ticket creation failed' });
         }
 
+        console.log('[VERIFY] Success! Ticket created:', ticketRes.data.id);
         return res.status(200).json({ 
           success: true, 
           message: 'Payment verified', 
@@ -121,7 +161,8 @@ export default async function handler(req: any, res: any) {
           ticket: ticketRes.data 
         });
       } catch (err: any) {
-        return res.status(500).json({ success: false, error: err.message });
+        console.log('[VERIFY] Exception:', err.message, err.stack);
+        return res.status(500).json({ success: false, error: `Exception: ${err.message}` });
       }
     }
 
