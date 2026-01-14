@@ -3,62 +3,107 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
-  // Check environment variables at request time
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+  try {
+    // STEP 1: Validate environment variables
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return res.status(500).json({
-      success: false,
-      error: 'Server misconfigured: missing Supabase credentials',
+    console.log('🔍 ENV CHECK:', {
+      hasUrl: !!SUPABASE_URL,
+      hasRole: !!SERVICE_ROLE_KEY,
+      hasSecret: !!RAZORPAY_KEY_SECRET,
+      hasId: !!RAZORPAY_KEY_ID,
     });
-  }
 
-  if (!RAZORPAY_KEY_SECRET || !RAZORPAY_KEY_ID) {
-    return res.status(500).json({
-      success: false,
-      error: 'Server misconfigured: missing Razorpay credentials',
+    if (!SUPABASE_URL) {
+      return res.status(500).json({
+        success: false,
+        error: 'SUPABASE_URL not configured',
+      });
+    }
+
+    if (!SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'SUPABASE_SERVICE_ROLE_KEY not configured',
+      });
+    }
+
+    if (!RAZORPAY_KEY_SECRET || !RAZORPAY_KEY_ID) {
+      return res.status(500).json({
+        success: false,
+        error: 'Razorpay credentials not configured',
+      });
+    }
+
+    // STEP 2: Initialize clients
+    const adminSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const razorpay = new Razorpay({
+      key_id: RAZORPAY_KEY_ID,
+      key_secret: RAZORPAY_KEY_SECRET,
     });
-  }
 
-  const adminSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    // STEP 3: Handle requests
+    if (req.method !== 'POST') {
+      return res.status(405).json({
+        success: false,
+        error: 'Method not allowed',
+      });
+    }
 
-  // Initialize Razorpay with LIVE credentials
-  const razorpay = new Razorpay({
-    key_id: RAZORPAY_KEY_ID,
-    key_secret: RAZORPAY_KEY_SECRET,
-  });
-  if (req.method === 'POST') {
     const { action } = req.body;
 
     // CREATE ORDER
     if (action === 'create-order') {
       const { teamId, eventName } = req.body;
 
+      console.log('📝 Creating order for team:', teamId);
+
       try {
         const { data: team, error: teamError } = await adminSupabase
           .from('teams')
-          .select(`team_size, event_id, events ( price_per_head )`)
+          .select('team_size, events(price_per_head)')
           .eq('id', teamId)
           .single();
 
-        if (teamError || !team) {
-          console.error('Team lookup error:', teamError);
-          return res.status(400).json({ success: false, error: 'Invalid team' });
+        if (teamError) {
+          console.error('❌ Team fetch error:', teamError);
+          return res.status(400).json({
+            success: false,
+            error: 'Team not found or database error',
+          });
+        }
+
+        if (!team) {
+          return res.status(400).json({
+            success: false,
+            error: 'Team not found',
+          });
         }
 
         const pricePerHead = team.events?.price_per_head;
         const teamSize = team.team_size;
-        if (typeof pricePerHead !== 'number' || typeof teamSize !== 'number') {
-          return res.status(400).json({ success: false, error: 'Invalid pricing data' });
+
+        if (!pricePerHead || !teamSize) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid team or event pricing data',
+          });
         }
 
-        const amount = Math.round(pricePerHead * teamSize * 100); // paise
+        const amountInPaise = Math.round(pricePerHead * teamSize * 100);
+
+        console.log('💰 Order amount:', {
+          pricePerHead,
+          teamSize,
+          total: pricePerHead * teamSize,
+          paise: amountInPaise,
+        });
 
         const order = await razorpay.orders.create({
-          amount,
+          amount: amountInPaise,
           currency: 'INR',
           receipt: `team_${teamId}_${Date.now()}`,
           notes: {
@@ -67,6 +112,8 @@ export default async function handler(req: any, res: any) {
           },
         });
 
+        console.log('✅ Order created:', order.id);
+
         return res.status(200).json({
           success: true,
           orderId: order.id,
@@ -74,10 +121,10 @@ export default async function handler(req: any, res: any) {
           currency: order.currency,
         });
       } catch (error) {
-        console.error('Order creation error:', error);
+        console.error('❌ Order creation failed:', error);
         return res.status(500).json({
           success: false,
-          error: 'Failed to create order',
+          error: 'Failed to create order. Please try again.',
         });
       }
     }
@@ -91,8 +138,9 @@ export default async function handler(req: any, res: any) {
         teamId,
       } = req.body;
 
+      console.log('🔐 Verifying payment:', razorpay_payment_id);
+
       try {
-        // Verify signature
         const body = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSignature = crypto
           .createHmac('sha256', RAZORPAY_KEY_SECRET)
@@ -100,74 +148,96 @@ export default async function handler(req: any, res: any) {
           .digest('hex');
 
         if (expectedSignature !== razorpay_signature) {
+          console.error('❌ Signature mismatch');
           return res.status(400).json({
             success: false,
             error: 'Invalid payment signature',
           });
         }
 
-        // Fetch payment details to confirm
+        console.log('✅ Signature verified');
+
         const payment = await razorpay.payments.fetch(razorpay_payment_id);
 
-        if (payment.status === 'captured') {
-          // Update latest payment row and create ticket atomically as much as possible client-side
-          const { data: payments, error: payFetchError } = await adminSupabase
-            .from('payments')
-            .select('id')
-            .eq('team_id', teamId)
-            .order('created_at', { ascending: false })
-            .limit(1);
+        console.log('📊 Payment status:', payment.status);
 
-          if (payFetchError || !payments || payments.length === 0) {
-            console.error('Payment row fetch error:', payFetchError);
-            return res.status(400).json({ success: false, error: 'No payment record found' });
-          }
-
-          const paymentIdDb = payments[0].id;
-
-          const { error: payUpdateError, data: updatedPayment } = await adminSupabase
-            .from('payments')
-            .update({ status: 'paid', payment_ref: razorpay_payment_id })
-            .eq('id', paymentIdDb)
-            .select()
-            .single();
-
-          if (payUpdateError) {
-            console.error('Payment update error:', payUpdateError);
-            return res.status(500).json({ success: false, error: 'Failed to update payment status' });
-          }
-
-          const { data: ticket, error: ticketError } = await adminSupabase
-            .from('tickets')
-            .upsert({ team_id: teamId }, { onConflict: 'team_id' })
-            .select()
-            .single();
-
-          if (ticketError) {
-            console.error('Ticket upsert error:', ticketError);
-            return res.status(500).json({ success: false, error: 'Failed to create ticket' });
-          }
-
-          return res.status(200).json({
-            success: true,
-            message: 'Payment verified successfully',
-            paymentId: razorpay_payment_id,
-            orderId: razorpay_order_id,
-            amount: payment.amount / 100, // Convert back to rupees
-            payment: updatedPayment,
-            ticket,
-          });
-        } else {
+        if (payment.status !== 'captured') {
           return res.status(400).json({
             success: false,
-            error: 'Payment not captured',
+            error: `Payment not captured. Status: ${payment.status}`,
           });
         }
+
+        const { data: payments, error: payFetchError } = await adminSupabase
+          .from('payments')
+          .select('id')
+          .eq('team_id', teamId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (payFetchError || !payments || payments.length === 0) {
+          console.error('❌ Payment record fetch error:', payFetchError);
+          return res.status(400).json({
+            success: false,
+            error: 'Payment record not found in database',
+          });
+        }
+
+        const paymentIdDb = payments[0].id;
+
+        const { error: payUpdateError, data: updatedPayment } = await adminSupabase
+          .from('payments')
+          .update({
+            status: 'paid',
+            payment_ref: razorpay_payment_id,
+          })
+          .eq('id', paymentIdDb)
+          .select()
+          .single();
+
+        if (payUpdateError) {
+          console.error('❌ Payment update error:', payUpdateError);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to update payment status',
+          });
+        }
+
+        console.log('✅ Payment marked as paid');
+
+        const { data: ticket, error: ticketError } = await adminSupabase
+          .from('tickets')
+          .upsert(
+            { team_id: teamId },
+            { onConflict: 'team_id' }
+          )
+          .select()
+          .single();
+
+        if (ticketError) {
+          console.error('❌ Ticket creation error:', ticketError);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to create ticket',
+          });
+        }
+
+        console.log('✅ Ticket created:', ticket.ticket_code);
+
+        return res.status(200).json({
+          success: true,
+          message: 'Payment verified successfully',
+          paymentId: razorpay_payment_id,
+          orderId: razorpay_order_id,
+          amount: payment.amount / 100,
+          payment: updatedPayment,
+          ticket,
+        });
       } catch (error) {
-        console.error('Payment verification error:', error);
+        console.error('❌ Payment verification failed:', error);
         return res.status(500).json({
           success: false,
-          error: 'Failed to verify payment',
+          error: 'Payment verification failed. Please contact support.',
         });
       }
     }
@@ -176,10 +246,11 @@ export default async function handler(req: any, res: any) {
       success: false,
       error: 'Invalid action',
     });
+  } catch (error) {
+    console.error('❌ FATAL ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
   }
-
-  return res.status(405).json({
-    success: false,
-    error: 'Method not allowed',
-  });
 }
