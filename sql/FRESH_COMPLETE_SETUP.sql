@@ -468,7 +468,7 @@ VALUES
   200,
   5,
   '/images/robo_racing.png',
-  '2026-03-15'
+  '2026-02-26'
 ),
 (
   'Robo Soccer',
@@ -484,7 +484,7 @@ VALUES
   200,
   5,
   '/images/RoboSoccer.png',
-  '2026-03-16'
+  '2026-02-27'
 ),
 (
   'Line Follower',
@@ -500,7 +500,7 @@ VALUES
   200,
   5,
   '/images/line_follower.png',
-  '2026-03-15'
+  '2026-02-26'
 ),
 (
   'Obstacle Run',
@@ -516,7 +516,7 @@ VALUES
   200,
   5,
   '/images/obstacle_run.png',
-  '2026-03-16'
+  '2026-02-27'
 ),
 (
   'Robo Sumo',
@@ -532,7 +532,7 @@ VALUES
   200,
   5,
   '/images/robo_sumo.png',
-  '2026-03-17'
+  '2026-02-27'
 ),
 (
   'Game Verse',
@@ -548,7 +548,7 @@ VALUES
   100,
   1,
   '/images/Game_verse.png',
-  '2026-03-15'
+  '2026-02-26'
 );
 
 -- ============================================================

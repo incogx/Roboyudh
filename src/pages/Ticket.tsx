@@ -311,7 +311,7 @@ const Ticket = () => {
             <li>• Keep this ticket code safe for check-in during the event</li>
             <li>• Ensure all team members are registered before the event</li>
             <li>• Contact organizers if payment status is not updated within 24 hours</li>
-            <li>• Event starts on March 15, 2026 at SIST Campus, Chennai</li>
+            <li>• Event starts on February 26, 2026 at SIST Campus, Chennai</li>
           </ul>
         </div>
       </div>

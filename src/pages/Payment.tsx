@@ -74,24 +74,42 @@ const Payment = () => {
         return;
       }
 
-      // Generate a unique receipt ID for tracking
-      const receiptId = `receipt_${paymentData.team_id}_${Date.now()}`;
+      // Create order via backend API
+      console.log('📝 Creating order via backend...');
+      const orderResponse = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-order',
+          amount: paymentData.amount,
+          teamId: paymentData.team_id,
+          eventName: paymentData.eventName,
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+      if (!orderData.success) {
+        setError('Failed to create order. Please try again.');
+        setIsProcessing(false);
+        return;
+      }
+
       const amountInPaise = Math.round(paymentData.amount * 100);
       
       console.log('💳 Razorpay Configuration:');
-      console.log('  - Receipt ID:', receiptId);
+      console.log('  - Order ID:', orderData.orderId);
       console.log('  - Amount (INR):', paymentData.amount);
       console.log('  - Amount (paise):', amountInPaise);
       console.log('  - Currency: INR');
-      console.log('  - Mode: TEST');
       
-      // Razorpay configuration (TEST mode - no order_id needed)
+      // Razorpay configuration
       const options = {
         key: razorpayKeyId,
         amount: amountInPaise,
         currency: 'INR',
         name: 'ROBOYUDH 2026',
         description: `Registration for ${paymentData.eventName}`,
+        order_id: orderData.orderId,
         image: '/roboyudh-logo.png',
         prefill: {
           name: paymentData.formData?.fullName || paymentData.teamName,
@@ -143,16 +161,37 @@ const Payment = () => {
       console.log('Payment Success Response:', razorpayResponse);
       setIsProcessing(true);
 
-      if (!razorpayResponse.razorpay_payment_id) {
+      if (!razorpayResponse.razorpay_payment_id || !razorpayResponse.razorpay_signature) {
         setError('Invalid payment response. Please try again.');
         setIsProcessing(false);
         return;
       }
 
-      const paymentId = razorpayResponse.razorpay_payment_id;
-      console.log('Updating payment status for team:', paymentData.team_id, 'Payment ID:', paymentId);
+      // Step 1: Verify payment via backend
+      console.log('🔐 Verifying payment via backend...');
+      const verifyResponse = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify-payment',
+          razorpay_order_id: razorpayResponse.razorpay_order_id,
+          razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+          razorpay_signature: razorpayResponse.razorpay_signature,
+          teamId: paymentData.team_id,
+        }),
+      });
 
-      // Step 1: Update payment status in database
+      const verifyData = await verifyResponse.json();
+      if (!verifyData.success) {
+        setError('Payment verification failed. Please contact support.');
+        setIsProcessing(false);
+        return;
+      }
+
+      console.log('✅ Payment verified successfully');
+      const paymentId = razorpayResponse.razorpay_payment_id;
+
+      // Step 2: Update payment status in database
       try {
         await updatePaymentStatus(
           paymentData.team_id,
@@ -165,13 +204,13 @@ const Payment = () => {
         throw new Error(`Failed to update payment: ${updateErr instanceof Error ? updateErr.message : 'Unknown error'}`);
       }
 
-      // Step 2: Create ticket after successful payment
+      // Step 3: Create ticket after successful payment
       try {
         console.log('Creating ticket for team:', paymentData.team_id);
         const ticket = await createTicket(paymentData.team_id);
         console.log('✅ Ticket created successfully:', ticket);
 
-        // Step 3: Update session storage with ticket info
+        // Step 4: Update session storage with ticket info
         const updatedData = {
           ...paymentData,
           ticket_id: ticket.id,
@@ -182,7 +221,7 @@ const Payment = () => {
         sessionStorage.setItem('registrationData', JSON.stringify(updatedData));
         console.log('✅ Session storage updated');
 
-        // Step 4: Redirect to ticket page
+        // Step 5: Redirect to ticket page
         console.log('🚀 Redirecting to ticket page...');
         navigate('/ticket');
       } catch (ticketErr) {

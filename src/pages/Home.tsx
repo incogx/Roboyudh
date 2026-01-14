@@ -65,7 +65,7 @@ const Home = () => {
               <Calendar className="w-5 h-5 text-cyan-400" />
               <div className="text-left">
                 <p className="text-xs text-gray-500 uppercase tracking-wider">Date</p>
-                <p className="text-white font-semibold">March 15-17, 2026</p>
+                <p className="text-white font-semibold">February 26-27, 2026</p>
               </div>
             </div>
 
