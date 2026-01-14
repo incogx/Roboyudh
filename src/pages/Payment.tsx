@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, CheckCircle2, XCircle, AlertCircle, IndianRupee } from 'lucide-react';
-import { updatePaymentStatus, createTicket } from '../lib/db';
 import { loadRazorpayScript } from '../lib/razorpay';
 
 // Razorpay types
@@ -94,11 +93,12 @@ const Payment = () => {
         return;
       }
 
-      const amountInPaise = Math.round(paymentData.amount * 100);
+      const amountInPaise = orderData.amount;
+      const amountInInr = orderData.amount / 100;
       
       console.log('💳 Razorpay Configuration:');
       console.log('  - Order ID:', orderData.orderId);
-      console.log('  - Amount (INR):', paymentData.amount);
+      console.log('  - Amount (INR):', amountInInr);
       console.log('  - Amount (paise):', amountInPaise);
       console.log('  - Currency: INR');
       
@@ -120,7 +120,6 @@ const Payment = () => {
           team_id: paymentData.team_id,
           event_name: paymentData.eventName,
           team_name: paymentData.teamName,
-          receipt_id: receiptId,
         },
         theme: {
           color: '#06b6d4',
@@ -182,56 +181,30 @@ const Payment = () => {
       });
 
       const verifyData = await verifyResponse.json();
-      if (!verifyData.success) {
+      if (!verifyData.success || !verifyData.ticket) {
         setError('Payment verification failed. Please contact support.');
         setIsProcessing(false);
         return;
       }
 
       console.log('✅ Payment verified successfully');
-      const paymentId = razorpayResponse.razorpay_payment_id;
+      const paymentId = verifyData.paymentId;
+      const ticket = verifyData.ticket;
 
-      // Step 2: Update payment status in database
-      try {
-        await updatePaymentStatus(
-          paymentData.team_id,
-          'paid',
-          paymentId
-        );
-        console.log('✅ Payment status updated successfully');
-      } catch (updateErr) {
-        console.error('❌ Payment status update error:', updateErr);
-        throw new Error(`Failed to update payment: ${updateErr instanceof Error ? updateErr.message : 'Unknown error'}`);
-      }
+      // Update session storage with ticket info from server
+      const updatedData = {
+        ...paymentData,
+        ticket_id: ticket.id,
+        ticketCode: ticket.ticket_code,
+        paymentStatus: 'paid',
+        razorpay_payment_id: paymentId,
+      };
+      sessionStorage.setItem('registrationData', JSON.stringify(updatedData));
+      console.log('✅ Session storage updated');
 
-      // Step 3: Create ticket after successful payment
-      try {
-        console.log('Creating ticket for team:', paymentData.team_id);
-        const ticket = await createTicket(paymentData.team_id);
-        console.log('✅ Ticket created successfully:', ticket);
-
-        // Step 4: Update session storage with ticket info
-        const updatedData = {
-          ...paymentData,
-          ticket_id: ticket.id,
-          ticketCode: ticket.ticket_code,
-          paymentStatus: 'paid',
-          razorpay_payment_id: paymentId,
-        };
-        sessionStorage.setItem('registrationData', JSON.stringify(updatedData));
-        console.log('✅ Session storage updated');
-
-        // Step 5: Redirect to ticket page
-        console.log('🚀 Redirecting to ticket page...');
-        navigate('/ticket');
-      } catch (ticketErr) {
-        console.error('❌ Ticket creation error:', ticketErr);
-        setError(
-          `Payment successful (${paymentId}) but ticket generation failed. ` +
-          `${ticketErr instanceof Error ? ticketErr.message : 'Please contact support.'}`
-        );
-        setIsProcessing(false);
-      }
+      // Redirect to ticket page
+      console.log('🚀 Redirecting to ticket page...');
+      navigate('/ticket');
     } catch (err) {
       console.error('❌ Post-payment processing error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
