@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "env": {
+    "VITE_SUPABASE_URL": {
+      "description": "Supabase Project URL"
+    },
+    "VITE_SUPABASE_ANON_KEY": {
+      "description": "Supabase Anonymous Key"
+    },
+    "VITE_RAZORPAY_KEY_ID": {
+      "description": "Razorpay Test/Live Key ID"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
