@@ -176,11 +176,14 @@ export default async function handler(req: any, res: any): Promise<void> {
 
         console.log('💰 Creating Razorpay order:', { amountInPaise });
 
+        // Create short receipt (max 40 chars) - use last 8 chars of teamId + timestamp
+        const shortReceipt = `T${teamId.slice(-8)}_${Date.now()}`;
+        
         const razorpayOrder = await createRazorpayOrder(
           RAZORPAY_KEY_ID,
           RAZORPAY_KEY_SECRET,
           amountInPaise,
-          `team_${teamId}_${Date.now()}`,
+          shortReceipt,
           { team_id: teamId }
         );
 
