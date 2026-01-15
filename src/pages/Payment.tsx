@@ -312,8 +312,6 @@ const Payment = () => {
                     <li>• Payment is processed securely through Razorpay</li>
                     <li>• Your ticket will be generated only after successful payment</li>
                     <li>• Keep your payment ID safe for future reference</li>
-                    <li>• <span className="text-cyan-400 font-semibold">For test mode, use card: 4111 1111 1111 1111</span></li>
-                    <li>• <span className="text-gray-400">CVV: Any 3 digits | Expiry: Any future date</span></li>
                   </ul>
                 </div>
               </div>
