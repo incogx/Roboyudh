@@ -104,9 +104,10 @@ export default async function handler(req: any, res: any): Promise<void> {
       }
 
       try {
+        // First, get the team with event_id
         const { data: team, error: teamError } = await supabase
           .from('teams')
-          .select('team_size, events(price_per_head)')
+          .select('team_size, event_id')
           .eq('id', teamId)
           .single();
 
@@ -117,7 +118,21 @@ export default async function handler(req: any, res: any): Promise<void> {
           });
         }
 
-        const pricePerHead = Array.isArray(team.events) ? team.events[0]?.price_per_head : team.events?.price_per_head;
+        // Then, get the event details
+        const { data: event, error: eventError } = await supabase
+          .from('events')
+          .select('price_per_head')
+          .eq('id', team.event_id)
+          .single();
+
+        if (eventError || !event) {
+          return res.status(400).json({
+            success: false,
+            error: 'Event not found',
+          });
+        }
+
+        const pricePerHead = event.price_per_head;
         const teamSize = team.team_size;
 
         if (!pricePerHead || !teamSize) {
