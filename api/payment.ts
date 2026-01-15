@@ -117,7 +117,7 @@ export default async function handler(req: any, res: any): Promise<void> {
           });
         }
 
-        const pricePerHead = team.events?.price_per_head;
+        const pricePerHead = Array.isArray(team.events) ? team.events[0]?.price_per_head : team.events?.price_per_head;
         const teamSize = team.team_size;
 
         if (!pricePerHead || !teamSize) {
