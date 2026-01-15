@@ -64,12 +64,24 @@ async function fetchRazorpayPayment(
 
 export default async function handler(req: any, res: any): Promise<void> {
   try {
-    const SUPABASE_URL = process.env.SUPABASE_URL;
+    // Try both with and without VITE_ prefix for compatibility
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
+
+    console.log('🔍 PAYMENT API ENV CHECK:', {
+      hasSupabaseUrl: !!SUPABASE_URL,
+      hasServiceRole: !!SUPABASE_SERVICE_ROLE_KEY,
+      hasRazorpaySecret: !!RAZORPAY_KEY_SECRET,
+      hasRazorpayId: !!RAZORPAY_KEY_ID,
+      method: req.method,
+      action: req.body?.action,
+      teamId: req.body?.teamId,
+    });
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('❌ Supabase credentials missing');
       return res.status(500).json({
         success: false,
         error: 'Supabase not configured',
@@ -77,6 +89,7 @@ export default async function handler(req: any, res: any): Promise<void> {
     }
 
     if (!RAZORPAY_KEY_SECRET || !RAZORPAY_KEY_ID) {
+      console.error('❌ Razorpay credentials missing');
       return res.status(500).json({
         success: false,
         error: 'Razorpay not configured',
@@ -104,6 +117,8 @@ export default async function handler(req: any, res: any): Promise<void> {
       }
 
       try {
+        console.log('📋 Fetching team:', teamId);
+        
         // First, get the team with event_id
         const { data: team, error: teamError } = await supabase
           .from('teams')
@@ -112,11 +127,14 @@ export default async function handler(req: any, res: any): Promise<void> {
           .single();
 
         if (teamError || !team) {
+          console.error('❌ Team fetch error:', teamError?.message || 'No team found');
           return res.status(400).json({
             success: false,
             error: 'Team not found',
           });
         }
+
+        console.log('✅ Team found:', { teamSize: team.team_size, eventId: team.event_id });
 
         // Then, get the event details
         const { data: event, error: eventError } = await supabase
@@ -126,11 +144,14 @@ export default async function handler(req: any, res: any): Promise<void> {
           .single();
 
         if (eventError || !event) {
+          console.error('❌ Event fetch error:', eventError?.message || 'No event found');
           return res.status(400).json({
             success: false,
             error: 'Event not found',
           });
         }
+
+        console.log('✅ Event found:', { pricePerHead: event.price_per_head });
 
         const pricePerHead = event.price_per_head;
         const teamSize = team.team_size;
@@ -151,6 +172,8 @@ export default async function handler(req: any, res: any): Promise<void> {
           });
         }
 
+        console.log('💰 Creating Razorpay order:', { amountInPaise });
+
         const razorpayOrder = await createRazorpayOrder(
           RAZORPAY_KEY_ID,
           RAZORPAY_KEY_SECRET,
@@ -158,6 +181,8 @@ export default async function handler(req: any, res: any): Promise<void> {
           `team_${teamId}_${Date.now()}`,
           { team_id: teamId }
         );
+
+        console.log('✅ Razorpay order created:', razorpayOrder.id);
 
         const { error: insertError } = await supabase
           .from('payments')
@@ -182,6 +207,7 @@ export default async function handler(req: any, res: any): Promise<void> {
           currency: razorpayOrder.currency,
         });
       } catch (error: any) {
+        console.error('❌ Create order error:', error.message, error.stack);
         return res.status(500).json({
           success: false,
           error: error.message || 'Failed to create order',
