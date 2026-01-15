@@ -35,7 +35,9 @@ async function createRazorpayOrder(
   });
 
   if (!response.ok) {
-    throw new Error(`Razorpay API error: ${response.statusText}`);
+    const errorBody = await response.text();
+    console.error('Razorpay API Error Response:', errorBody);
+    throw new Error(`Razorpay API error: ${response.statusText} - ${errorBody}`);
   }
 
   return response.json();
