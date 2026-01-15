@@ -95,8 +95,9 @@ CREATE INDEX idx_registration_details_team_id ON registration_details(team_id);
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  razorpay_order_id TEXT UNIQUE,
   amount DECIMAL(10, 2) NOT NULL CHECK (amount >= 0),
-  status VARCHAR(50) NOT NULL DEFAULT 'unpaid' CHECK (status IN ('paid', 'unpaid')),
+  status VARCHAR(50) NOT NULL DEFAULT 'unpaid' CHECK (status IN ('paid', 'unpaid', 'created')),
   payment_ref VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -105,6 +106,7 @@ CREATE TABLE payments (
 CREATE INDEX idx_payments_team_id ON payments(team_id);
 CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_payments_created_at ON payments(created_at DESC);
+CREATE INDEX idx_payments_razorpay_order_id ON payments(razorpay_order_id);
 
 -- ============================================================
 -- Step 7: CREATE TICKETS TABLE
