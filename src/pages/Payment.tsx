@@ -75,14 +75,12 @@ const Payment = () => {
 
       // Create order via backend API
       console.log('📝 Creating order via backend...');
-      const orderResponse = await fetch('/api/payment', {
+      const orderResponse = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'create-order',
-          amount: paymentData.amount,
           teamId: paymentData.team_id,
-          eventName: paymentData.eventName,
+          userId: paymentData.userId,
         }),
       });
 
@@ -168,37 +166,44 @@ const Payment = () => {
 
       // Step 1: Verify payment via backend
       console.log('🔐 Verifying payment via backend...');
-      const verifyResponse = await fetch('/api/payment', {
+      const verifyResponse = await fetch('/api/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'verify-payment',
           razorpay_order_id: razorpayResponse.razorpay_order_id,
           razorpay_payment_id: razorpayResponse.razorpay_payment_id,
           razorpay_signature: razorpayResponse.razorpay_signature,
-          teamId: paymentData.team_id,
+          userId: paymentData.userId,
         }),
       });
 
       const verifyData = await verifyResponse.json();
-      if (!verifyData.success || !verifyData.ticket) {
+      
+      // Frontend must check backend's final authority: success flag
+      if (!verifyData.success) {
         setError('Payment verification failed. Please contact support.');
         setIsProcessing(false);
         return;
       }
 
+      // Verify ticket was created (final proof of success)
+      if (!verifyData.ticket || !verifyData.ticket.id) {
+        setError('Ticket creation failed. Please contact support.');
+        setIsProcessing(false);
+        return;
+      }
+
       console.log('✅ Payment verified successfully');
-      const paymentId = verifyData.paymentId;
       const ticket = verifyData.ticket;
+Id;
 
       // Update session storage with ticket info from server
       const updatedData = {
         ...paymentData,
-        ticket_id: ticket.id,
-        ticketCode: ticket.ticket_code,
+        ticket_id: ticket,
+        ticketCode: verifyData.ticketCode,
         paymentStatus: 'paid',
-        razorpay_payment_id: paymentId,
-      };
+        razorpay_payment_id: verifyData.razorpay_payment_i
       sessionStorage.setItem('registrationData', JSON.stringify(updatedData));
       console.log('✅ Session storage updated');
 

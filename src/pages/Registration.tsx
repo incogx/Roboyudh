@@ -15,6 +15,8 @@ const Registration = () => {
     teamName: '',
     teamLeaderName: '',
     teamMembers: ['', '', ''],
+    contactEmail: '',
+    contactPhone: '',
     
     // Personal Details
     fullName: '',
@@ -90,6 +92,10 @@ const Registration = () => {
     // Team Details
     if (!formData.teamName.trim()) newErrors.teamName = 'Team name is required';
     if (!formData.teamLeaderName.trim()) newErrors.teamLeaderName = 'Team leader name is required';
+    if (!formData.contactEmail.trim()) newErrors.contactEmail = 'Contact email is required';
+    else if (!validateEmail(formData.contactEmail)) newErrors.contactEmail = 'Invalid contact email format';
+    if (!formData.contactPhone.trim()) newErrors.contactPhone = 'Contact phone is required';
+    else if (!validatePhone(formData.contactPhone)) newErrors.contactPhone = 'Contact phone must be 10 digits';
     
     // Personal Details
     if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required';
@@ -170,6 +176,8 @@ const Registration = () => {
       // Create team
       const team = await createTeam({
         event_id: selectedEvent.id,
+        contact_email: formData.contactEmail,
+        contact_phone: formData.contactPhone,
         team_name: formData.teamName,
         college_name: formData.collegeName,
         team_size: totalTeamSize,
@@ -201,12 +209,7 @@ const Registration = () => {
 
       // DO NOT create ticket yet - only after successful payment
 
-      // Store in session storage with ALL form data for payment page
-      sessionStorage.setItem(
-        'registrationData',
-        JSON.stringify({
-          team_id: team.id,
-          payment_id: payment.id,
+      // SuserId: user!.id,
           eventName: selectedEvent.name,
           teamName: formData.teamName,
           collegeName: team.college_name,
@@ -217,6 +220,14 @@ const Registration = () => {
           createdAt: new Date().toISOString(),
           // Extended registration data
           formData: {
+            teamName: formData.teamName,
+            teamLeaderName: formData.teamLeaderName,
+            fullName: formData.fullName,
+            gender: formData.gender,
+            mobileNumber: formData.mobileNumber,
+            email: formData.email,
+            contactEmail: formData.contactEmail,
+            contactPhone: formData.contactPhone
             teamName: formData.teamName,
             teamLeaderName: formData.teamLeaderName,
             fullName: formData.fullName,
@@ -363,6 +374,41 @@ const Registration = () => {
                     }`}
                   />
                   {errors.teamLeaderName && <p className="text-red-400 text-sm mt-1">{errors.teamLeaderName}</p>}
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">
+                      Contact Email <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.contactEmail}
+                      onChange={(e) => handleInputChange('contactEmail', e.target.value)}
+                      placeholder="team@college.com"
+                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                        errors.contactEmail ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
+                      }`}
+                    />
+                    {errors.contactEmail && <p className="text-red-400 text-sm mt-1">{errors.contactEmail}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">
+                      Contact Phone <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.contactPhone}
+                      onChange={(e) => handleInputChange('contactPhone', e.target.value)}
+                      placeholder="10-digit number"
+                      maxLength={10}
+                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                        errors.contactPhone ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
+                      }`}
+                    />
+                    {errors.contactPhone && <p className="text-red-400 text-sm mt-1">{errors.contactPhone}</p>}
+                  </div>
                 </div>
 
                 <div>

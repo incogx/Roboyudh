@@ -703,8 +703,11 @@ export async function getRegistrationStats(): Promise<{
     ]);
 
     const totalParticipants = teams.reduce((sum, team) => sum + team.team_size, 0);
+    
+    // Count ONLY verified paid payments (status === 'paid')
+    // 'created' and 'unpaid' statuses both count as pending
     const paidPayments = payments.filter(p => p.status === 'paid');
-    const unpaidPayments = payments.filter(p => p.status === 'unpaid');
+    const unpaidPayments = payments.filter(p => p.status !== 'paid'); // 'created' and 'unpaid'
 
     return {
       totalRegistrations: teams.length,
