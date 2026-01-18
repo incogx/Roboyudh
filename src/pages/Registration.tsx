@@ -1,675 +1,404 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { createTeam, addTeamMembers, createPayment, fetchEvents, Event, createRegistrationDetails } from '../lib/db';
+import { supabase } from '../lib/supabase';
 
-const Registration = () => {
+interface Event {
+  id: string;
+  name: string;
+  registration_fee: number;
+}
+
+interface TeamMember {
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+interface TeamFormData {
+  team_name: string;
+  phone_number: string;
+  team_members: TeamMember[];
+}
+
+const Registration: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const selectedEventId = searchParams.get('event');
+  const { eventId } = useParams<{ eventId: string }>();
 
-  const [formData, setFormData] = useState({
-    // Team Details
-    teamName: '',
-    teamLeaderName: '',
-    teamMembers: ['', '', ''],
-    contactEmail: '',
-    contactPhone: '',
-    
-    // Personal Details
-    fullName: '',
-    gender: '',
-    mobileNumber: '',
-    email: '',
-    collegeName: '',
-    city: '',
-    state: '',
-    
-    // Academic Details
-    department: '',
-    yearOfStudy: '',
-    
-    // Declarations
-    declareTrue: false,
-    agreeRules: false,
+  const [event, setEvent] = useState<Event | null>(null);
+  const [formData, setFormData] = useState<TeamFormData>({
+    team_name: '',
+    phone_number: '',
+    team_members: [{ name: '', email: '', phone: '' }],
   });
 
-  const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
 
+  // Check auth on mount
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/login');
-      return;
     }
   }, [user, authLoading, navigate]);
 
+  // Fetch event details
   useEffect(() => {
-    loadEvents();
-  }, []);
-
-  useEffect(() => {
-    if (selectedEventId && events.length > 0) {
-      const event = events.find(e => e.id === selectedEventId);
-      if (event) {
-        setSelectedEvent(event);
-      }
-    }
-  }, [selectedEventId, events]);
-
-  const loadEvents = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchEvents();
-      setEvents(data);
-    } catch (err) {
-      setError('Failed to load events');
-    } finally {
+    if (!eventId) {
+      setError('Event ID not found');
       setLoading(false);
-    }
-  };
-
-  // Validation functions
-  const validateEmail = (email: string) => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
-  };
-
-  const validatePhone = (phone: string) => {
-    const regex = /^[0-9]{10}$/;
-    return regex.test(phone);
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    // Team Details
-    if (!formData.teamName.trim()) newErrors.teamName = 'Team name is required';
-    if (!formData.teamLeaderName.trim()) newErrors.teamLeaderName = 'Team leader name is required';
-    if (!formData.contactEmail.trim()) newErrors.contactEmail = 'Contact email is required';
-    else if (!validateEmail(formData.contactEmail)) newErrors.contactEmail = 'Invalid contact email format';
-    if (!formData.contactPhone.trim()) newErrors.contactPhone = 'Contact phone is required';
-    else if (!validatePhone(formData.contactPhone)) newErrors.contactPhone = 'Contact phone must be 10 digits';
-    
-    // Personal Details
-    if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required';
-    if (!formData.mobileNumber.trim()) newErrors.mobileNumber = 'Mobile number is required';
-    else if (!validatePhone(formData.mobileNumber)) newErrors.mobileNumber = 'Mobile number must be 10 digits';
-    
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    else if (!validateEmail(formData.email)) newErrors.email = 'Invalid email format';
-    
-    if (!formData.collegeName.trim()) newErrors.collegeName = 'College name is required';
-    if (!formData.city.trim()) newErrors.city = 'City is required';
-    if (!formData.state.trim()) newErrors.state = 'State is required';
-    
-    // Academic Details
-    if (!formData.department.trim()) newErrors.department = 'Department is required';
-    if (!formData.yearOfStudy) newErrors.yearOfStudy = 'Year of study is required';
-    
-    // Declarations
-    if (!formData.declareTrue) newErrors.declareTrue = 'You must confirm the details are true';
-    if (!formData.agreeRules) newErrors.agreeRules = 'You must agree to follow event rules';
-    
-    // Team members - at least team leader
-    const validMembers = formData.teamMembers.filter(m => m.trim());
-    if (validMembers.length === 0) newErrors.teamMembers = 'Add at least one team member';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
-
-  const handleMemberChange = (index: number, value: string) => {
-    const newMembers = [...formData.teamMembers];
-    newMembers[index] = value;
-    setFormData(prev => ({ ...prev, teamMembers: newMembers }));
-  };
-
-  const addMemberField = () => {
-    if (formData.teamMembers.length < (selectedEvent?.max_team_size || 5)) {
-      setFormData(prev => ({
-        ...prev,
-        teamMembers: [...prev.teamMembers, '']
-      }));
-    }
-  };
-
-  const removeMemberField = (index: number) => {
-    if (formData.teamMembers.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        teamMembers: prev.teamMembers.filter((_, i) => i !== index)
-      }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm() || !selectedEvent) {
-      setError('Please fix all errors before submitting');
       return;
     }
 
-    setIsSubmitting(true);
+    const fetchEvent = async () => {
+      try {
+        setLoading(true);
+        const { data, error: fetchError } = await supabase
+          .from('events')
+          .select('id, name, registration_fee')
+          .eq('id', eventId)
+          .single();
+
+        if (fetchError || !data) {
+          setError('Event not found');
+          return;
+        }
+
+        setEvent(data);
+      } catch (err) {
+        setError('Failed to load event');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvent();
+  }, [eventId]);
+
+  // Handle team name change
+  const handleTeamNameChange = (value: string) => {
+    setFormData(prev => ({ ...prev, team_name: value }));
+  };
+
+  // Handle phone number change (10 digits only)
+  const handlePhoneChange = (value: string) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 10);
+    setFormData(prev => ({ ...prev, phone_number: cleaned }));
+  };
+
+  // Handle team member field change
+  const handleMemberChange = (index: number, field: keyof TeamMember, value: string) => {
+    const newMembers = [...formData.team_members];
+    newMembers[index] = { ...newMembers[index], [field]: value };
+    setFormData(prev => ({ ...prev, team_members: newMembers }));
+  };
+
+  // Add another member field
+  const addMemberField = () => {
+    setFormData(prev => ({
+      ...prev,
+      team_members: [...prev.team_members, { name: '', email: '', phone: '' }],
+    }));
+  };
+
+  // Remove member field
+  const removeMemberField = (index: number) => {
+    if (formData.team_members.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        team_members: prev.team_members.filter((_, i) => i !== index),
+      }));
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
 
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
+
+    if (!event) {
+      setError('Event not found');
+      return;
+    }
+
+    // Validate inputs
+    if (!formData.team_name.trim()) {
+      setError('Team name is required');
+      return;
+    }
+
+    if (!/^\d{10}$/.test(formData.phone_number)) {
+      setError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    const validMembers = formData.team_members.filter(m => m.name.trim());
+    if (validMembers.length === 0) {
+      setError('At least one team member name is required');
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      // Team leader is always the first member
-      const validMembers = formData.teamMembers.filter(m => m.trim());
-      const allMembers = [formData.teamLeaderName, ...validMembers]; // Leader + additional members
-      const totalTeamSize = allMembers.length; // 1 (leader) + additional members
-
-      // Create team
-      const team = await createTeam({
-        event_id: selectedEvent.id,
-        contact_email: formData.contactEmail,
-        contact_phone: formData.contactPhone,
-        team_name: formData.teamName,
-        college_name: formData.collegeName,
-        team_size: totalTeamSize,
-        created_by: user!.id,
-        is_onspot: false,
-      });
-
-      // Add all team members (including leader)
-      await addTeamMembers(team.id, allMembers);
-
-      // Save registration details to database
-      await createRegistrationDetails({
-        team_id: team.id,
-        team_leader_name: formData.teamLeaderName,
-        full_name: formData.fullName,
-        gender: formData.gender || null,
-        mobile_number: formData.mobileNumber,
-        email: formData.email,
-        college_name: formData.collegeName || null,
-        city: formData.city,
-        state: formData.state,
-        department: formData.department || null,
-        year_of_study: formData.yearOfStudy || null,
-      });
-
-      // Create payment record (status: unpaid)
-      const totalAmount = totalTeamSize * selectedEvent.price_per_head;
-      const payment = await createPayment(team.id, totalAmount);
-
-      // DO NOT create ticket yet - only after successful payment
-
-      // SuserId: user!.id,
-          eventName: selectedEvent.name,
-          teamName: formData.teamName,
-          collegeName: team.college_name,
-          teamSize: totalTeamSize,
-          memberNames: allMembers,
-          amount: totalAmount,
-          paymentStatus: 'unpaid',
-          createdAt: new Date().toISOString(),
-          // Extended registration data
-          formData: {
-            teamName: formData.teamName,
-            teamLeaderName: formData.teamLeaderName,
-            fullName: formData.fullName,
-            gender: formData.gender,
-            mobileNumber: formData.mobileNumber,
-            email: formData.email,
-            contactEmail: formData.contactEmail,
-            contactPhone: formData.contactPhone
-            teamName: formData.teamName,
-            teamLeaderName: formData.teamLeaderName,
-            fullName: formData.fullName,
-            gender: formData.gender,
-            mobileNumber: formData.mobileNumber,
-            email: formData.email,
-            collegeName: formData.collegeName,
-            city: formData.city,
-            state: formData.state,
-            department: formData.department,
-            yearOfStudy: formData.yearOfStudy,
-          }
+      // Step 1: Create team record
+      const { data: teamData, error: teamError } = await supabase
+        .from('teams')
+        .insert({
+          event_id: event.id,
+          user_id: user.id,
+          team_name: formData.team_name,
+          phone_number: formData.phone_number,
         })
-      );
+        .select()
+        .single();
 
-      // ✅ SECURITY: Registration data is now stored ONLY in Supabase registration_details table
-      // ✅ No sensitive data stored in localStorage
-      // Admin can access via fetchRegistrationDetails() which enforces RLS
+      if (teamError || !teamData) {
+        setError('Failed to create team');
+        setSubmitting(false);
+        return;
+      }
 
-      // Redirect to payment page
-      navigate('/payment');
+      // Step 2: Create team members records
+      const membersData = validMembers.map(m => ({
+        team_id: teamData.id,
+        name: m.name,
+        email: m.email || null,
+        phone: m.phone || null,
+      }));
+
+      const { error: membersError } = await supabase
+        .from('team_members')
+        .insert(membersData);
+
+      if (membersError) {
+        setError('Failed to add team members');
+        setSubmitting(false);
+        return;
+      }
+
+      // Step 3: Create registration record
+      const { data: registrationData, error: registrationError } = await supabase
+        .from('registrations')
+        .insert({
+          team_id: teamData.id,
+          event_id: event.id,
+          user_id: user.id,
+          status: 'ACTIVE',
+        })
+        .select()
+        .single();
+
+      if (registrationError || !registrationData) {
+        setError('Failed to create registration');
+        setSubmitting(false);
+        return;
+      }
+
+      // Step 4: Create payment record
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          team_id: teamData.id,
+          event_id: event.id,
+          user_id: user.id,
+          amount: event.registration_fee,
+          status: 'PENDING',
+        })
+        .select()
+        .single();
+
+      if (paymentError || !paymentData) {
+        setError('Failed to create payment record');
+        setSubmitting(false);
+        return;
+      }
+
+      // Success: Redirect to payment page
+      setSubmitting(false);
+      navigate(`/payment/${paymentData.id}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
-      setError(message);
+      setError('An unexpected error occurred');
       console.error(err);
-    } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black pt-24 pb-16 px-4 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !submitting) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
+          <p className="text-gray-700 mb-6">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Event information not available</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black pt-24 pb-16 px-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
-      </div>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Team Registration</h1>
+        <p className="text-gray-600 mb-8">{event.name}</p>
 
-      <div className="relative max-w-2xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl md:text-6xl font-bold mb-4">
-            <span className="bg-gradient-to-r from-cyan-400 to-blue-500 text-transparent bg-clip-text">
-              Event Registration
-            </span>
-          </h1>
-          <div className="w-24 h-1 bg-gradient-to-r from-cyan-500 to-blue-600 mx-auto mb-6"></div>
-          <p className="text-xl text-gray-400">Complete your team registration form</p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <p className="text-gray-700 mb-2">
+            <span className="font-semibold">Registration Fee:</span> ₹{event.registration_fee}
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-red-400">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Important Notice - Read Event Details */}
-          <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-2 border-yellow-500/50 rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-yellow-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-yellow-400 mb-2">⚠️ Important: Read Event Details First!</h3>
-                <p className="text-gray-300 mb-4">
-                  Before registering, you <span className="font-bold text-yellow-300">must read the complete event details, rules, and regulations</span>. 
-                  Each event has specific requirements and guidelines that you need to follow.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/events')}
-                  className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-all inline-flex items-center gap-2"
-                >
-                  📋 View All Event Details & Rules
-                </button>
-              </div>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Team Name */}
+          <div>
+            <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-2">
+              Team Name <span className="text-red-600">*</span>
+            </label>
+            <input
+              type="text"
+              id="teamName"
+              value={formData.team_name}
+              onChange={(e) => handleTeamNameChange(e.target.value)}
+              placeholder="Enter your team name"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
           </div>
 
-          {/* Event Selection */}
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Select Event</h2>
-            <select
-              value={selectedEvent?.id || ''}
-              onChange={(e) => {
-                const event = events.find(ev => ev.id === e.target.value);
-                setSelectedEvent(event || null);
-              }}
-              className="w-full px-4 py-3 bg-black/50 border border-cyan-500/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
-            >
-              <option value="">Choose an event...</option>
-              {events.map(event => (
-                <option key={event.id} value={event.id}>
-                  {event.name} - ₹{event.price_per_head} per head
-                </option>
+          {/* Phone Number */}
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+              Phone Number <span className="text-red-600">*</span>
+            </label>
+            <input
+              type="tel"
+              id="phone"
+              value={formData.phone_number}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              placeholder="10-digit phone number"
+              maxLength={10}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
+          </div>
+
+          {/* Team Members */}
+          <div className="border-t pt-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Team Members</h2>
+            <div className="space-y-4">
+              {formData.team_members.map((member, index) => (
+                <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-sm font-medium text-gray-700">Member {index + 1}</h3>
+                    {formData.team_members.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeMemberField(index)}
+                        className="text-red-600 hover:text-red-700 text-sm font-medium"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={member.name}
+                      onChange={(e) => handleMemberChange(index, 'name', e.target.value)}
+                      placeholder="Full name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="email"
+                      value={member.email || ''}
+                      onChange={(e) => handleMemberChange(index, 'email', e.target.value)}
+                      placeholder="Email (optional)"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="tel"
+                      value={member.phone || ''}
+                      onChange={(e) => handleMemberChange(index, 'phone', e.target.value)}
+                      placeholder="Phone (optional)"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
               ))}
-            </select>
+            </div>
+            <button
+              type="button"
+              onClick={addMemberField}
+              className="mt-4 px-4 py-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
+            >
+              + Add Another Member
+            </button>
+            <p className="text-xs text-gray-500 mt-4">At least one team member name is required</p>
           </div>
 
-          {selectedEvent && (
-            <>
-              {/* Team Details Section */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-6">Team Details</h2>
-                
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">
-                    Team Name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.teamName}
-                    onChange={(e) => handleInputChange('teamName', e.target.value)}
-                    placeholder="Enter your team name (e.g., Tech Warriors, Code Ninjas)"
-                    className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                      errors.teamName ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                    }`}
-                  />
-                  {errors.teamName && <p className="text-red-400 text-sm mt-1">{errors.teamName}</p>}
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">
-                    Team Leader Name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.teamLeaderName}
-                    onChange={(e) => handleInputChange('teamLeaderName', e.target.value)}
-                    placeholder="Enter team leader name"
-                    className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                      errors.teamLeaderName ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                    }`}
-                  />
-                  {errors.teamLeaderName && <p className="text-red-400 text-sm mt-1">{errors.teamLeaderName}</p>}
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Contact Email <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.contactEmail}
-                      onChange={(e) => handleInputChange('contactEmail', e.target.value)}
-                      placeholder="team@college.com"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.contactEmail ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.contactEmail && <p className="text-red-400 text-sm mt-1">{errors.contactEmail}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Contact Phone <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.contactPhone}
-                      onChange={(e) => handleInputChange('contactPhone', e.target.value)}
-                      placeholder="10-digit number"
-                      maxLength={10}
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.contactPhone ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.contactPhone && <p className="text-red-400 text-sm mt-1">{errors.contactPhone}</p>}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-3">
-                    Team Members (Max {selectedEvent.max_team_size}) <span className="text-red-400">*</span>
-                  </label>
-                  <div className="space-y-2">
-                    {formData.teamMembers.map((member, index) => (
-                      <div key={index} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={member}
-                          onChange={(e) => handleMemberChange(index, e.target.value)}
-                          placeholder={`Member ${index + 1} name`}
-                          className="flex-1 px-4 py-2 bg-black/50 border border-cyan-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
-                        />
-                        {formData.teamMembers.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeMemberField(index)}
-                            className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {errors.teamMembers && <p className="text-red-400 text-sm mt-2">{errors.teamMembers}</p>}
-                  
-                  {formData.teamMembers.length < selectedEvent.max_team_size && (
-                    <button
-                      type="button"
-                      onClick={addMemberField}
-                      className="mt-3 flex items-center gap-2 px-4 py-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-4 h-4" /> Add Member
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Personal Details Section */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-6">Personal Details</h2>
-                
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Full Name <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.fullName}
-                      onChange={(e) => handleInputChange('fullName', e.target.value)}
-                      placeholder="As per college ID"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.fullName ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.fullName && <p className="text-red-400 text-sm mt-1">{errors.fullName}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">Gender</label>
-                    <select
-                      value={formData.gender}
-                      onChange={(e) => handleInputChange('gender', e.target.value)}
-                      className="w-full px-4 py-3 bg-black/50 border border-cyan-500/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
-                    >
-                      <option value="">Select...</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Mobile Number <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.mobileNumber}
-                      onChange={(e) => handleInputChange('mobileNumber', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="10-digit mobile number"
-                      maxLength={10}
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.mobileNumber ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.mobileNumber && <p className="text-red-400 text-sm mt-1">{errors.mobileNumber}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Email ID <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      placeholder="your.email@example.com"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.email ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      College Name <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.collegeName}
-                      onChange={(e) => handleInputChange('collegeName', e.target.value)}
-                      placeholder="Your college/institution name"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.collegeName ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.collegeName && <p className="text-red-400 text-sm mt-1">{errors.collegeName}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      City <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => handleInputChange('city', e.target.value)}
-                      placeholder="City"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.city ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.city && <p className="text-red-400 text-sm mt-1">{errors.city}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      State <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.state}
-                      onChange={(e) => handleInputChange('state', e.target.value)}
-                      placeholder="State"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.state ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.state && <p className="text-red-400 text-sm mt-1">{errors.state}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Academic Details Section */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-6">Academic Details</h2>
-                
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Department / Branch <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.department}
-                      onChange={(e) => handleInputChange('department', e.target.value)}
-                      placeholder="e.g., Computer Science"
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                        errors.department ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    />
-                    {errors.department && <p className="text-red-400 text-sm mt-1">{errors.department}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">
-                      Year of Study <span className="text-red-400">*</span>
-                    </label>
-                    <select
-                      value={formData.yearOfStudy}
-                      onChange={(e) => handleInputChange('yearOfStudy', e.target.value)}
-                      className={`w-full px-4 py-3 bg-black/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                        errors.yearOfStudy ? 'border-red-500 focus:ring-red-400/20' : 'border-cyan-500/30 focus:border-cyan-400 focus:ring-cyan-400/20'
-                      }`}
-                    >
-                      <option value="">Select year...</option>
-                      <option value="1">1st Year</option>
-                      <option value="2">2nd Year</option>
-                      <option value="3">3rd Year</option>
-                      <option value="4">4th Year</option>
-                    </select>
-                    {errors.yearOfStudy && <p className="text-red-400 text-sm mt-1">{errors.yearOfStudy}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Declaration & Consent Section */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-6">Declaration & Consent</h2>
-                
-                <div className="space-y-4">
-                  <label className="flex items-start gap-3 cursor-pointer p-3 hover:bg-gray-800/50 rounded-lg transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={formData.declareTrue}
-                      onChange={(e) => handleInputChange('declareTrue', e.target.checked)}
-                      className="w-5 h-5 mt-0.5 accent-cyan-400 cursor-pointer"
-                    />
-                    <span className="text-gray-300">
-                      I confirm that the details provided are <span className="font-semibold">true and valid</span>. <span className="text-red-400">*</span>
-                    </span>
-                  </label>
-                  {errors.declareTrue && <p className="text-red-400 text-sm">{errors.declareTrue}</p>}
-
-                  <label className="flex items-start gap-3 cursor-pointer p-3 hover:bg-gray-800/50 rounded-lg transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={formData.agreeRules}
-                      onChange={(e) => handleInputChange('agreeRules', e.target.checked)}
-                      className="w-5 h-5 mt-0.5 accent-cyan-400 cursor-pointer"
-                    />
-                    <span className="text-gray-300">
-                      I have <span className="font-bold text-cyan-400">read and understood the complete event details, rules, and regulations</span> and agree to follow them along with college discipline. <span className="text-red-400">*</span>
-                    </span>
-                  </label>
-                  {errors.agreeRules && <p className="text-red-400 text-sm">{errors.agreeRules}</p>}
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg hover:from-cyan-600 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    Register Now
-                  </>
-                )}
-              </button>
-            </>
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              {error}
+            </div>
           )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              disabled={submitting}
+              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition"
+            >
+              {submitting ? 'Submitting...' : 'Continue to Payment'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
   );
-}
+};
 
 export default Registration;
 
