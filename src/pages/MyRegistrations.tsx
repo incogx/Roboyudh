@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Calendar, Users, Building2, Ticket as TicketIcon } from 'lucide-react';
+import { Download, Calendar, Users, Building2, Ticket as TicketIcon, Clock, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getUserRegistrations } from '../lib/db';
 import html2canvas from 'html2canvas';
@@ -13,6 +13,7 @@ interface Registration {
   college_name: string;
   team_size: number;
   amount: number;
+  payment_id: string | null;
   payment_status: string;
   ticket_code: string | null;
   created_at: string;
@@ -42,6 +43,7 @@ export default function MyRegistrations() {
     try {
       setLoading(true);
       const data = await getUserRegistrations();
+      console.log('Loaded registrations:', JSON.stringify(data, null, 2));
       setRegistrations(data);
     } catch (error) {
       console.error('Error loading registrations:', error);
@@ -142,11 +144,18 @@ export default function MyRegistrations() {
                             {registration.ticket_code}
                           </span>
                         </div>
+                      ) : registration.payment_status === 'REJECTED' ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <XCircle className="w-6 h-6 text-red-400" />
+                          <span className="text-red-400 font-mono text-sm">
+                            PAYMENT REJECTED
+                          </span>
+                        </div>
                       ) : (
                         <div className="flex items-center gap-2 mb-2">
-                          <TicketIcon className="w-6 h-6 text-orange-400" />
-                          <span className="text-orange-400 font-mono text-sm">
-                            PAYMENT PENDING
+                          <Clock className="w-6 h-6 text-yellow-400 animate-pulse" />
+                          <span className="text-yellow-400 font-mono text-sm">
+                            AWAITING CONFIRMATION
                           </span>
                         </div>
                       )}
@@ -166,13 +175,17 @@ export default function MyRegistrations() {
                         ₹{registration.amount}
                       </div>
                       <div className="text-sm text-gray-400">Total Amount</div>
-                      {registration.payment_status === 'paid' ? (
+                      {registration.payment_status === 'APPROVED' || registration.payment_status === 'paid' ? (
                         <div className="mt-2 inline-block px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-semibold">
-                          ✓ PAID
+                          ✓ APPROVED
+                        </div>
+                      ) : registration.payment_status === 'REJECTED' ? (
+                        <div className="mt-2 inline-block px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-semibold">
+                          ✗ REJECTED
                         </div>
                       ) : (
-                        <div className="mt-2 inline-block px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-semibold">
-                          ⚠ UNPAID
+                        <div className="mt-2 inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-semibold">
+                          ⏳ UNDER REVIEW
                         </div>
                       )}
                     </div>
@@ -219,9 +232,9 @@ export default function MyRegistrations() {
                   )}
                 </div>
 
-                {/* Download Button or Payment Button */}
+                {/* Download Button or Status Message */}
                 <div className="px-8 py-4 bg-gray-800/50 border-t border-gray-700">
-                  {registration.payment_status === 'paid' && registration.ticket_code ? (
+                  {(registration.payment_status === 'APPROVED' || registration.payment_status === 'paid') && registration.ticket_code ? (
                     <button
                       onClick={() => handleDownloadTicket(registration)}
                       disabled={downloadingId === registration.id}
@@ -239,26 +252,26 @@ export default function MyRegistrations() {
                         </>
                       )}
                     </button>
+                  ) : registration.payment_status === 'REJECTED' ? (
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                      <div className="flex items-center gap-3 px-6 py-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
+                        <XCircle className="w-5 h-5" />
+                        <div>
+                          <p className="font-semibold">Payment Rejected</p>
+                          <p className="text-sm text-red-400/70">Please contact support or re-register for the event.</p>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        // Store registration data and redirect to payment
-                        sessionStorage.setItem('registrationData', JSON.stringify({
-                          team_id: registration.id,
-                          eventName: registration.event_name,
-                          teamName: registration.team_name,
-                          collegeName: registration.college_name,
-                          teamSize: registration.team_size,
-                          memberNames: registration.member_names,
-                          amount: registration.amount,
-                          paymentStatus: 'unpaid',
-                        }));
-                        navigate('/payment');
-                      }}
-                      className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all flex items-center justify-center gap-2"
-                    >
-                      Complete Payment →
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3 px-6 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400">
+                        <Clock className="w-5 h-5 animate-pulse" />
+                        <div>
+                          <p className="font-semibold">Waiting for Confirmation</p>
+                          <p className="text-sm text-yellow-400/70">Your payment is being verified by admin. You'll receive your ticket once approved.</p>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

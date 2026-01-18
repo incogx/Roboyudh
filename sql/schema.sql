@@ -29,17 +29,21 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- Purpose: Event master data
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('tech', 'non-tech')),
   description TEXT,
-  event_date TIMESTAMP WITH TIME ZONE NOT NULL,
-  location VARCHAR(255),
-  max_teams INT DEFAULT 100,
-  registration_fee DECIMAL(10, 2) NOT NULL,
+  rules TEXT[] DEFAULT '{}',
+  price_per_head INTEGER NOT NULL DEFAULT 0,
+  max_team_size INTEGER NOT NULL DEFAULT 5,
+  image_url TEXT,
+  rulebook_url TEXT,
+  event_date DATE,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+DROP INDEX IF EXISTS idx_events_is_active;
 CREATE INDEX idx_events_is_active ON events(is_active);
 
 
@@ -58,7 +62,9 @@ CREATE TABLE IF NOT EXISTS teams (
   CONSTRAINT unique_team_per_user_per_event UNIQUE(event_id, user_id)
 );
 
+DROP INDEX IF EXISTS idx_teams_event_id;
 CREATE INDEX idx_teams_event_id ON teams(event_id);
+DROP INDEX IF EXISTS idx_teams_user_id;
 CREATE INDEX idx_teams_user_id ON teams(user_id);
 
 
@@ -73,6 +79,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+DROP INDEX IF EXISTS idx_team_members_team_id;
 CREATE INDEX idx_team_members_team_id ON team_members(team_id);
 
 
@@ -90,8 +97,11 @@ CREATE TABLE IF NOT EXISTS registrations (
   CONSTRAINT unique_registration_per_team UNIQUE(team_id)
 );
 
+DROP INDEX IF EXISTS idx_registrations_user_id;
 CREATE INDEX idx_registrations_user_id ON registrations(user_id);
+DROP INDEX IF EXISTS idx_registrations_event_id;
 CREATE INDEX idx_registrations_event_id ON registrations(event_id);
+DROP INDEX IF EXISTS idx_registrations_team_id;
 CREATE INDEX idx_registrations_team_id ON registrations(team_id);
 
 
@@ -128,9 +138,13 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT unique_payment_per_team UNIQUE(team_id)
 );
 
+DROP INDEX IF EXISTS idx_payments_team_id;
 CREATE INDEX idx_payments_team_id ON payments(team_id);
+DROP INDEX IF EXISTS idx_payments_user_id;
 CREATE INDEX idx_payments_user_id ON payments(user_id);
+DROP INDEX IF EXISTS idx_payments_status;
 CREATE INDEX idx_payments_status ON payments(status);
+DROP INDEX IF EXISTS idx_payments_event_id;
 CREATE INDEX idx_payments_event_id ON payments(event_id);
 
 
@@ -154,9 +168,13 @@ CREATE TABLE IF NOT EXISTS tickets (
   CONSTRAINT unique_ticket_per_team UNIQUE(team_id)
 );
 
+DROP INDEX IF EXISTS idx_tickets_team_id;
 CREATE INDEX idx_tickets_team_id ON tickets(team_id);
+DROP INDEX IF EXISTS idx_tickets_user_id;
 CREATE INDEX idx_tickets_user_id ON tickets(user_id);
+DROP INDEX IF EXISTS idx_tickets_event_id;
 CREATE INDEX idx_tickets_event_id ON tickets(event_id);
+DROP INDEX IF EXISTS idx_tickets_payment_id;
 CREATE INDEX idx_tickets_payment_id ON tickets(payment_id);
 
 
@@ -172,8 +190,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+DROP INDEX IF EXISTS idx_audit_log_admin_email;
 CREATE INDEX idx_audit_log_admin_email ON audit_log(admin_email);
+DROP INDEX IF EXISTS idx_audit_log_payment_id;
 CREATE INDEX idx_audit_log_payment_id ON audit_log(payment_id);
+DROP INDEX IF EXISTS idx_audit_log_action;
 CREATE INDEX idx_audit_log_action ON audit_log(action);
 
 
@@ -213,6 +234,7 @@ $$ LANGUAGE plpgsql;
 
 
 -- Attach trigger to payments table (ONLY table with status transitions)
+DROP TRIGGER IF EXISTS trg_payment_status_validation ON payments;
 CREATE TRIGGER trg_payment_status_validation
   BEFORE UPDATE OF status ON payments
   FOR EACH ROW
@@ -240,39 +262,45 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 -- Implementation: Using is_admin(auth.jwt()->>'email') for all admin checks
 
 -- ====== EVENTS POLICIES ======
-
+DROP POLICY IF EXISTS "events_select_active" ON events;
 CREATE POLICY "events_select_active" ON events
   FOR SELECT
   USING (is_active = TRUE OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "events_insert_admin_only" ON events;
 CREATE POLICY "events_insert_admin_only" ON events
   FOR INSERT
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "events_update_admin_only" ON events;
 CREATE POLICY "events_update_admin_only" ON events
   FOR UPDATE
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')))
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "events_delete_admin_only" ON events;
 CREATE POLICY "events_delete_admin_only" ON events
   FOR DELETE
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 
 -- ====== TEAMS POLICIES ======
-
+DROP POLICY IF EXISTS "teams_select_own" ON teams;
 CREATE POLICY "teams_select_own" ON teams
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "teams_select_admin" ON teams;
 CREATE POLICY "teams_select_admin" ON teams
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "teams_insert_own" ON teams;
 CREATE POLICY "teams_insert_own" ON teams
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "teams_update_own" ON teams;
 CREATE POLICY "teams_update_own" ON teams
   FOR UPDATE
   USING (user_id = auth.uid())
@@ -280,7 +308,7 @@ CREATE POLICY "teams_update_own" ON teams
 
 
 -- ====== TEAM_MEMBERS POLICIES ======
-
+DROP POLICY IF EXISTS "team_members_select_own_team" ON team_members;
 CREATE POLICY "team_members_select_own_team" ON team_members
   FOR SELECT
   USING (
@@ -291,10 +319,12 @@ CREATE POLICY "team_members_select_own_team" ON team_members
     )
   );
 
+DROP POLICY IF EXISTS "team_members_select_admin" ON team_members;
 CREATE POLICY "team_members_select_admin" ON team_members
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "team_members_insert_own_team" ON team_members;
 CREATE POLICY "team_members_insert_own_team" ON team_members
   FOR INSERT
   WITH CHECK (
@@ -305,6 +335,7 @@ CREATE POLICY "team_members_insert_own_team" ON team_members
     )
   );
 
+DROP POLICY IF EXISTS "team_members_update_own_team" ON team_members;
 CREATE POLICY "team_members_update_own_team" ON team_members
   FOR UPDATE
   USING (
@@ -324,36 +355,41 @@ CREATE POLICY "team_members_update_own_team" ON team_members
 
 
 -- ====== REGISTRATIONS POLICIES ======
-
+DROP POLICY IF EXISTS "registrations_select_own" ON registrations;
 CREATE POLICY "registrations_select_own" ON registrations
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "registrations_select_admin" ON registrations;
 CREATE POLICY "registrations_select_admin" ON registrations
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "registrations_insert_own" ON registrations;
 CREATE POLICY "registrations_insert_own" ON registrations
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
 
 -- ====== PAYMENTS POLICIES ======
-
+DROP POLICY IF EXISTS "payments_select_own" ON payments;
 CREATE POLICY "payments_select_own" ON payments
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "payments_select_admin" ON payments;
 CREATE POLICY "payments_select_admin" ON payments
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
+DROP POLICY IF EXISTS "payments_insert_own" ON payments;
 CREATE POLICY "payments_insert_own" ON payments
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
 -- Users can update their OWN payments when status = PENDING (submit proof)
 -- Can transition from PENDING to WAITING
+DROP POLICY IF EXISTS "payments_update_own_pending" ON payments;
 CREATE POLICY "payments_update_own_pending" ON payments
   FOR UPDATE
   USING (user_id = auth.uid() AND status = 'PENDING')
@@ -361,6 +397,7 @@ CREATE POLICY "payments_update_own_pending" ON payments
 
 -- Only admins can change payment status (approve/reject)
 -- Admins can update payments from WAITING to APPROVED/REJECTED
+DROP POLICY IF EXISTS "payments_update_admin_only" ON payments;
 CREATE POLICY "payments_update_admin_only" ON payments
   FOR UPDATE
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')) AND status = 'WAITING')
@@ -368,16 +405,18 @@ CREATE POLICY "payments_update_admin_only" ON payments
 
 
 -- ====== TICKETS POLICIES ======
-
+DROP POLICY IF EXISTS "tickets_select_own" ON tickets;
 CREATE POLICY "tickets_select_own" ON tickets
   FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "tickets_select_admin" ON tickets;
 CREATE POLICY "tickets_select_admin" ON tickets
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 -- Only admins can create tickets (via backend function, not direct insert)
+DROP POLICY IF EXISTS "tickets_insert_admin_only" ON tickets;
 CREATE POLICY "tickets_insert_admin_only" ON tickets
   FOR INSERT
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')) AND 
@@ -389,13 +428,14 @@ CREATE POLICY "tickets_insert_admin_only" ON tickets
 
 
 -- ====== AUDIT_LOG POLICIES ======
-
 -- Only admins can read audit logs
+DROP POLICY IF EXISTS "audit_log_select_admin" ON audit_log;
 CREATE POLICY "audit_log_select_admin" ON audit_log
   FOR SELECT
   USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 -- Backend can insert audit logs (no RLS check, relies on backend validation)
+DROP POLICY IF EXISTS "audit_log_insert_system" ON audit_log;
 CREATE POLICY "audit_log_insert_system" ON audit_log
   FOR INSERT
   WITH CHECK (TRUE);

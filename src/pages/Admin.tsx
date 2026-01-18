@@ -11,12 +11,16 @@ import {
   createOnSpotRegistration,
   fetchTeamMembers,
   fetchRegistrationDetails,
+  approvePayment,
+  rejectPayment,
+  createTicket,
   Event,
   Team,
   Payment,
   TeamMember,
   RegistrationDetails,
 } from '../lib/db';
+import { supabase } from '../lib/supabase';
 import {
   LayoutDashboard,
   Users,
@@ -29,13 +33,20 @@ import {
   Download,
   Search,
   ChevronDown,
+  XCircle,
+  Mail,
+  Image,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 
 interface DashboardStats {
   totalRegistrations: number;
   totalParticipants: number;
-  paidRegistrations: number;
-  unpaidRegistrations: number;
+  approvedPayments: number;
+  pendingPayments: number;
+  waitingPayments: number;
+  rejectedPayments: number;
   totalRevenue: number;
   pendingRevenue: number;
 }
@@ -62,12 +73,19 @@ const Admin = () => {
   const [teamMembers, setTeamMembers] = useState<Record<string, TeamMember[]>>({});
   const [teamDetails, setTeamDetails] = useState<Record<string, RegistrationDetails | null>>({});
   const [loadingMembers, setLoadingMembers] = useState<string | null>(null);
+  
+  // Payment Approval State
+  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState<string | null>(null);
+  const [screenshotModal, setScreenshotModal] = useState<string | null>(null);
 
   // On-Spot Registration Form State
   const [onSpotForm, setOnSpotForm] = useState({
     eventId: '',
     teamName: '',
     collegeName: '',
+    phoneNumber: '',
     teamSize: '1',
     memberNames: [''],
   });
@@ -101,7 +119,8 @@ const Admin = () => {
       let matchesStatus = true;
       if (filterStatus) {
         const payment = payments.find(p => p.team_id === team.id);
-        matchesStatus = filterStatus === 'paid' ? payment?.status === 'paid' : payment?.status !== 'paid';
+        const paymentStatus = payment?.status || 'PENDING';
+        matchesStatus = filterStatus === paymentStatus;
       }
 
       return matchesSearch && matchesEvent && matchesCollege && matchesStatus;
@@ -110,6 +129,103 @@ const Admin = () => {
 
   // Get unique colleges for filter
   const uniqueColleges = [...new Set(teams.map(t => t.college_name))];
+
+  // Get screenshot URL from Supabase Storage
+  const getScreenshotUrl = (screenshotPath: string | null): string | null => {
+    if (!screenshotPath) return null;
+    
+    // If it's already a full URL, return it
+    if (screenshotPath.startsWith('http')) {
+      return screenshotPath;
+    }
+    
+    // Build public URL from path
+    const { data } = supabase.storage.from('payment-screenshots').getPublicUrl(screenshotPath);
+    console.log('Screenshot path:', screenshotPath);
+    console.log('Public URL:', data?.publicUrl);
+    return data?.publicUrl || null;
+  };
+
+  // Handle Payment Approval
+  const handleApprovePayment = async (payment: Payment, team: Team, userEmail: string) => {
+    if (!payment || processingPayment) return;
+    
+    setProcessingPayment(payment.id);
+    try {
+      // 1. Approve the payment
+      await approvePayment(payment.id, 'Payment verified and approved by admin');
+      
+      // 2. Create ticket for the team
+      await createTicket(payment.team_id, payment.event_id, payment.user_id, payment.id);
+      
+      // 3. Send email notification (via mailto link or external service)
+      const event = events.find(e => e.id === payment.event_id);
+      const subject = encodeURIComponent(`✅ ROBOYUDH 2026 - Payment Approved for ${event?.name || 'Event'}`);
+      const body = encodeURIComponent(
+        `Dear ${team.team_name},\n\n` +
+        `Great news! Your payment of ₹${payment.amount} for ${event?.name || 'the event'} has been verified and approved.\n\n` +
+        `🎟️ Your ticket has been generated! You can view and download it from:\n` +
+        `https://roboyudh.sathyabama.in/my-registrations\n\n` +
+        `Event Details:\n` +
+        `- Event: ${event?.name}\n` +
+        `- Team: ${team.team_name}\n` +
+        `- Amount Paid: ₹${payment.amount}\n\n` +
+        `See you at ROBOYUDH 2026! 🤖\n\n` +
+        `Best regards,\n` +
+        `ROBOYUDH Team\n` +
+        `Sathyabama Institute of Science and Technology`
+      );
+      
+      // Open mailto link for admin to send email
+      window.open(`mailto:${userEmail}?subject=${subject}&body=${body}`, '_blank');
+      
+      // Reload data
+      await loadDashboard();
+      
+      alert(`✅ Payment approved and ticket generated!\n\nPlease send the email notification to: ${userEmail}`);
+    } catch (err) {
+      console.error('Approval error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to approve payment');
+    } finally {
+      setProcessingPayment(null);
+    }
+  };
+
+  // Handle Payment Rejection
+  const handleRejectPayment = async (payment: Payment, userEmail: string) => {
+    if (!payment || !rejectReason.trim() || processingPayment) return;
+    
+    setProcessingPayment(payment.id);
+    try {
+      // Reject the payment
+      await rejectPayment(payment.id, rejectReason);
+      
+      // Send rejection email
+      const event = events.find(e => e.id === payment.event_id);
+      const subject = encodeURIComponent(`❌ ROBOYUDH 2026 - Payment Rejected for ${event?.name || 'Event'}`);
+      const body = encodeURIComponent(
+        `Dear Participant,\n\n` +
+        `Unfortunately, your payment for ${event?.name || 'the event'} has been rejected.\n\n` +
+        `Reason: ${rejectReason}\n\n` +
+        `If you believe this is an error, please contact us with your transaction details.\n\n` +
+        `Best regards,\n` +
+        `ROBOYUDH Team`
+      );
+      
+      window.open(`mailto:${userEmail}?subject=${subject}&body=${body}`, '_blank');
+      
+      setShowRejectModal(null);
+      setRejectReason('');
+      await loadDashboard();
+      
+      alert(`❌ Payment rejected.\n\nPlease send the rejection email to: ${userEmail}`);
+    } catch (err) {
+      console.error('Rejection error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to reject payment');
+    } finally {
+      setProcessingPayment(null);
+    }
+  };
 
   // Load team members when expanding
   const handleExpandTeam = async (teamId: string) => {
@@ -207,7 +323,7 @@ const Admin = () => {
           extendedData?.year_of_study ? `${extendedData.year_of_study}${extendedData.year_of_study === '1' ? 'st' : extendedData.year_of_study === '2' ? 'nd' : extendedData.year_of_study === '3' ? 'rd' : 'th'} Year` : 'N/A',
           new Date(team.created_at).toLocaleDateString('en-IN'),
           `₹${payment?.amount || 0}`,
-          payment?.status === 'paid' ? 'Paid' : 'Pending'
+          payment?.status || 'PENDING'
         ];
       });
 
@@ -274,7 +390,7 @@ const Admin = () => {
 
   const handleOnSpotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onSpotForm.eventId || !onSpotForm.collegeName || onSpotForm.memberNames.some(n => !n.trim())) {
+    if (!onSpotForm.eventId || !onSpotForm.collegeName || !onSpotForm.phoneNumber || onSpotForm.memberNames.some(n => !n.trim())) {
       setError('Please fill all required fields');
       return;
     }
@@ -285,6 +401,7 @@ const Admin = () => {
         onSpotForm.eventId,
         onSpotForm.teamName || onSpotForm.memberNames[0],
         onSpotForm.collegeName,
+        onSpotForm.phoneNumber,
         parseInt(onSpotForm.teamSize),
         onSpotForm.memberNames,
         parseInt(onSpotForm.teamSize) * 200
@@ -294,6 +411,7 @@ const Admin = () => {
         eventId: '',
         teamName: '',
         collegeName: '',
+        phoneNumber: '',
         teamSize: '1',
         memberNames: [''],
       });
@@ -452,14 +570,22 @@ const Admin = () => {
 
                 <div className="p-6 bg-gradient-to-br from-gray-900 to-black border border-cyan-500/20 rounded-xl">
                   <h3 className="text-xl font-bold text-cyan-400 mb-4">Payment Status</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-4 gap-4">
                     <div className="p-4 bg-black/50 rounded-lg">
-                      <p className="text-gray-400 text-sm mb-2">Paid</p>
-                      <p className="text-2xl font-bold text-green-400">{stats.paidRegistrations}</p>
+                      <p className="text-gray-400 text-sm mb-2">Approved</p>
+                      <p className="text-2xl font-bold text-green-400">{stats.approvedPayments}</p>
                     </div>
                     <div className="p-4 bg-black/50 rounded-lg">
-                      <p className="text-gray-400 text-sm mb-2">Unpaid</p>
-                      <p className="text-2xl font-bold text-orange-400">{stats.unpaidRegistrations}</p>
+                      <p className="text-gray-400 text-sm mb-2">Awaiting Review</p>
+                      <p className="text-2xl font-bold text-yellow-400">{stats.waitingPayments}</p>
+                    </div>
+                    <div className="p-4 bg-black/50 rounded-lg">
+                      <p className="text-gray-400 text-sm mb-2">Pending Upload</p>
+                      <p className="text-2xl font-bold text-orange-400">{stats.pendingPayments}</p>
+                    </div>
+                    <div className="p-4 bg-black/50 rounded-lg">
+                      <p className="text-gray-400 text-sm mb-2">Rejected</p>
+                      <p className="text-2xl font-bold text-red-400">{stats.rejectedPayments}</p>
                     </div>
                   </div>
                 </div>
@@ -525,8 +651,10 @@ const Admin = () => {
                     className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
                   >
                     <option value="">All Status</option>
-                    <option value="paid">Paid</option>
-                    <option value="pending">Pending</option>
+                    <option value="PENDING">Pending Upload</option>
+                    <option value="WAITING">Awaiting Approval</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
                   </select>
                 </div>
 
@@ -573,17 +701,39 @@ const Admin = () => {
                                 <span className="text-cyan-400 font-semibold text-base">₹{payment?.amount || 0}</span>
                               </td>
                               <td className="py-4 px-6">
-                                {payment?.status === 'paid' ? (
-                                  <span className="flex items-center gap-2 text-green-400">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span className="font-medium">Paid</span>
-                                  </span>
-                                ) : (
-                                  <span className="flex items-center gap-2 text-orange-400">
-                                    <Clock className="w-4 h-4" />
-                                    <span className="font-medium">Pending</span>
-                                  </span>
-                                )}
+                                {(() => {
+                                  const status = payment?.status || 'PENDING';
+                                  switch (status) {
+                                    case 'APPROVED':
+                                      return (
+                                        <span className="flex items-center gap-2 text-green-400">
+                                          <CheckCircle className="w-4 h-4" />
+                                          <span className="font-medium">Approved</span>
+                                        </span>
+                                      );
+                                    case 'WAITING':
+                                      return (
+                                        <span className="flex items-center gap-2 text-yellow-400">
+                                          <Clock className="w-4 h-4" />
+                                          <span className="font-medium">Awaiting</span>
+                                        </span>
+                                      );
+                                    case 'REJECTED':
+                                      return (
+                                        <span className="flex items-center gap-2 text-red-400">
+                                          <XCircle className="w-4 h-4" />
+                                          <span className="font-medium">Rejected</span>
+                                        </span>
+                                      );
+                                    default:
+                                      return (
+                                        <span className="flex items-center gap-2 text-orange-400">
+                                          <Clock className="w-4 h-4" />
+                                          <span className="font-medium">Pending</span>
+                                        </span>
+                                      );
+                                  }
+                                })()}
                               </td>
                               <td className="py-4 px-6">
                                 <button
@@ -716,12 +866,115 @@ const Admin = () => {
                                             </div>
                                             <div className="flex justify-between">
                                               <span className="text-gray-400">Payment Status:</span>
-                                              <span className={payment?.status === 'paid' ? 'text-green-400 font-semibold' : 'text-orange-400 font-semibold'}>
-                                                {payment?.status === 'paid' ? 'Paid' : 'Pending'}
+                                              <span className={
+                                                payment?.status === 'APPROVED' ? 'text-green-400 font-semibold' : 
+                                                payment?.status === 'WAITING' ? 'text-yellow-400 font-semibold' :
+                                                payment?.status === 'REJECTED' ? 'text-red-400 font-semibold' :
+                                                'text-orange-400 font-semibold'
+                                              }>
+                                                {payment?.status || 'PENDING'}
                                               </span>
                                             </div>
+                                            {payment?.transaction_id && (
+                                              <div className="flex justify-between">
+                                                <span className="text-gray-400">Transaction ID:</span>
+                                                <span className="text-white font-mono text-xs">{payment.transaction_id}</span>
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
+                                        
+                                        {/* Payment Verification Panel - Only for WAITING status */}
+                                        {payment?.status === 'WAITING' && (
+                                          <div className="md:col-span-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                                            <h4 className="text-yellow-400 font-semibold mb-4 text-sm uppercase flex items-center gap-2">
+                                              <AlertCircle className="w-4 h-4" />
+                                              Payment Verification Required
+                                            </h4>
+                                            
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                              {/* Payment Screenshot */}
+                                              <div>
+                                                <p className="text-gray-400 text-sm mb-2">Payment Screenshot:</p>
+                                                {payment.screenshot_url ? (
+                                                  <button
+                                                    onClick={() => setScreenshotModal(payment.screenshot_url)}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-cyan-400 hover:bg-cyan-500/30 transition-all"
+                                                  >
+                                                    <Image className="w-4 h-4" />
+                                                    View Screenshot
+                                                    <ExternalLink className="w-3 h-3" />
+                                                  </button>
+                                                ) : (
+                                                  <span className="text-red-400 text-sm">No screenshot uploaded</span>
+                                                )}
+                                              </div>
+                                              
+                                              {/* Transaction Details */}
+                                              <div>
+                                                <p className="text-gray-400 text-sm mb-2">Transaction ID / UTR:</p>
+                                                <code className="bg-black/50 px-3 py-2 rounded text-white font-mono block">
+                                                  {payment.transaction_id || 'Not provided'}
+                                                </code>
+                                              </div>
+                                            </div>
+                                            
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-3 mt-4">
+                                              <button
+                                                onClick={() => handleApprovePayment(payment, team, extendedData?.email || '')}
+                                                disabled={processingPayment === payment.id}
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 font-semibold hover:bg-green-500/30 transition-all disabled:opacity-50"
+                                              >
+                                                {processingPayment === payment.id ? (
+                                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                  <CheckCircle className="w-4 h-4" />
+                                                )}
+                                                Approve & Generate Ticket
+                                              </button>
+                                              <button
+                                                onClick={() => setShowRejectModal(payment.id)}
+                                                disabled={processingPayment === payment.id}
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 font-semibold hover:bg-red-500/30 transition-all disabled:opacity-50"
+                                              >
+                                                <XCircle className="w-4 h-4" />
+                                                Reject
+                                              </button>
+                                            </div>
+                                            
+                                            <p className="text-gray-500 text-xs mt-3 flex items-center gap-1">
+                                              <Mail className="w-3 h-3" />
+                                              Email notification will be sent to: {extendedData?.email || 'N/A'}
+                                            </p>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Approved Payment Info */}
+                                        {payment?.status === 'APPROVED' && (
+                                          <div className="md:col-span-3 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 text-green-400">
+                                              <CheckCircle className="w-5 h-5" />
+                                              <span className="font-semibold">Payment Approved - Ticket Generated</span>
+                                            </div>
+                                            {payment.admin_comment && (
+                                              <p className="text-gray-400 text-sm mt-2">Admin Note: {payment.admin_comment}</p>
+                                            )}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Rejected Payment Info */}
+                                        {payment?.status === 'REJECTED' && (
+                                          <div className="md:col-span-3 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 text-red-400">
+                                              <XCircle className="w-5 h-5" />
+                                              <span className="font-semibold">Payment Rejected</span>
+                                            </div>
+                                            {payment.admin_comment && (
+                                              <p className="text-gray-400 text-sm mt-2">Reason: {payment.admin_comment}</p>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })()}
@@ -856,6 +1109,18 @@ const Admin = () => {
                     </div>
 
                     <div>
+                      <label className="block text-cyan-400 font-semibold mb-2">Phone Number *</label>
+                      <input
+                        type="tel"
+                        value={onSpotForm.phoneNumber}
+                        onChange={(e) => setOnSpotForm({ ...onSpotForm, phoneNumber: e.target.value })}
+                        required
+                        placeholder="Enter phone number"
+                        className="w-full px-4 py-3 bg-black border border-cyan-500/30 rounded-lg text-white placeholder-gray-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-cyan-400 font-semibold mb-2">Team Size</label>
                       <select
                         value={onSpotForm.teamSize}
@@ -901,6 +1166,80 @@ const Admin = () => {
           </div>
         </main>
       </div>
+
+      {/* Screenshot Modal */}
+      {screenshotModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setScreenshotModal(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] overflow-auto bg-gray-900 rounded-xl p-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setScreenshotModal(null)}
+              className="absolute top-4 right-4 p-2 bg-red-500/20 hover:bg-red-500/40 rounded-full text-red-400 transition-colors z-10"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+            <img
+              src={getScreenshotUrl(screenshotModal) || ''}
+              alt="Payment Screenshot"
+              className="max-w-full h-auto rounded-lg"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect fill="%231a1a1a" width="400" height="300"/><text x="200" y="150" text-anchor="middle" fill="%23666" font-size="16">Failed to load screenshot</text></svg>';
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+              <XCircle className="w-5 h-5" />
+              Reject Payment
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Please provide a reason for rejecting this payment. This will be sent to the user.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection (e.g., Invalid transaction ID, Screenshot doesn't match amount, etc.)"
+              className="w-full px-4 py-3 bg-black border border-red-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-400 h-32 resize-none mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowRejectModal(null);
+                  setRejectReason('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const payment = payments.find(p => p.id === showRejectModal);
+                  const team = teams.find(t => t.id === payment?.team_id);
+                  const details = team ? teamDetails[team.id] : null;
+                  if (payment && team) {
+                    handleRejectPayment(payment, details?.email || '');
+                  }
+                }}
+                disabled={!rejectReason.trim() || processingPayment === showRejectModal}
+                className="flex-1 px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 font-semibold hover:bg-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {processingPayment === showRejectModal ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <XCircle className="w-4 h-4" />
+                )}
+                Reject Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -4,23 +4,32 @@
  *
  * All functions automatically use the authenticated user's context
  * RLS policies enforce that users can only access their own data
+ * 
+ * PAYMENT FLOW: PENDING → WAITING → APPROVED/REJECTED
+ * - PENDING: User registered, no proof uploaded
+ * - WAITING: User uploaded proof, waiting admin review
+ * - APPROVED: Admin approved, ticket generated
+ * - REJECTED: Admin rejected (final)
  */
 
 import { supabase } from './supabase';
 
 // ============================================================
-// TYPES
+// TYPES - Aligned with ROBOYUDH_2026_DATABASE.sql
 // ============================================================
 
 export interface Event {
   id: string;
   name: string;
   category: 'tech' | 'non-tech';
-  description: string;
+  description: string | null;
   rules: string[];
   price_per_head: number;
   max_team_size: number;
-  image_url: string;
+  image_url: string | null;
+  rulebook_url: string | null;
+  event_date: string | null;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -28,10 +37,11 @@ export interface Event {
 export interface Team {
   id: string;
   event_id: string;
+  user_id: string;  // Changed from created_by
   team_name: string;
   college_name: string;
+  phone_number: string;  // Required field
   team_size: number;
-  created_by: string;
   is_onspot: boolean;
   created_at: string;
   updated_at: string;
@@ -41,15 +51,25 @@ export interface TeamMember {
   id: string;
   team_id: string;
   member_name: string;
+  member_email: string | null;
+  member_phone: string | null;
   created_at: string;
 }
+
+// Payment status flow: PENDING → WAITING → APPROVED/REJECTED
+export type PaymentStatus = 'PENDING' | 'WAITING' | 'APPROVED' | 'REJECTED';
 
 export interface Payment {
   id: string;
   team_id: string;
+  event_id: string;
+  user_id: string;
   amount: number;
-  status: 'paid' | 'unpaid';
-  payment_ref: string | null;
+  transaction_id: string | null;
+  screenshot_url: string | null;
+  status: PaymentStatus;
+  admin_comment: string | null;
+  admin_decision_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,7 +77,11 @@ export interface Payment {
 export interface Ticket {
   id: string;
   team_id: string;
+  event_id: string;
+  user_id: string;
+  payment_id: string;
   ticket_code: string;
+  qr_code_data: string | null;
   pdf_url: string | null;
   created_at: string;
 }
@@ -74,43 +98,46 @@ export interface LeaderboardEntry {
   team?: Team;
 }
 
-export interface RegistrationDetails {
+export interface Registration {
   id: string;
-  team_id: string;
-  team_leader_name: string;
-  full_name: string;
-  gender: string | null;
-  mobile_number: string;
-  email: string;
-  college_name: string | null;
-  city: string;
-  state: string;
-  department: string | null;
-  year_of_study: string | null;
+  event_name: string;
+  event_date: string | null;
+  event_image: string | null;
+  team_name: string;
+  college_name: string;
+  phone_number: string | null;
+  team_size: number;
+  amount: number;
+  payment_id: string | null;
+  payment_status: string;
+  transaction_id: string | null;
+  screenshot_url: string | null;
+  ticket_code: string | null;
+  qr_code_data: string | null;
   created_at: string;
-  updated_at: string;
+  member_names: string[];
 }
 
 // ============================================================
-// EVENTS - Public Read
+// EVENTS - Public Access (Read-only for users)
 // ============================================================
 
 /**
- * Fetch all events (public)
- * Everyone can read events
+ * Fetch all active events
  */
 export async function fetchEvents(): Promise<Event[]> {
   const { data, error } = await supabase
     .from('events')
     .select('*')
-    .order('created_at', { ascending: false });
+    .eq('is_active', true)
+    .order('event_date', { ascending: true });
 
   if (error) throw new Error(`Failed to fetch events: ${error.message}`);
   return data || [];
 }
 
 /**
- * Fetch single event by ID (public)
+ * Fetch event by ID
  */
 export async function fetchEventById(eventId: string): Promise<Event | null> {
   const { data, error } = await supabase
@@ -123,20 +150,6 @@ export async function fetchEventById(eventId: string): Promise<Event | null> {
     throw new Error(`Failed to fetch event: ${error.message}`);
   }
   return data || null;
-}
-
-/**
- * Create event (admin only)
- */
-export async function createEvent(event: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-  const { data, error } = await supabase
-    .from('events')
-    .insert([event])
-    .select()
-    .single();
-
-  if (error) throw new Error(`Failed to create event: ${error.message}`);
-  return data;
 }
 
 /**
@@ -172,7 +185,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
 
 /**
  * Fetch all teams for current user
- * Users can only see their own teams
+ * Users can only see their own teams (RLS enforced)
  */
 export async function fetchUserTeams(): Promise<Team[]> {
   const { data, error } = await supabase
@@ -216,11 +229,23 @@ export async function fetchTeamsByEvent(eventId: string): Promise<Team[]> {
 
 /**
  * Create a new team for current user
+ * Requires: event_id, user_id, team_name, college_name, phone_number, team_size
  */
-export async function createTeam(team: Omit<Team, 'id' | 'created_at' | 'updated_at'>): Promise<Team> {
+export async function createTeam(team: {
+  event_id: string;
+  user_id: string;
+  team_name: string;
+  college_name: string;
+  phone_number: string;
+  team_size: number;
+  is_onspot?: boolean;
+}): Promise<Team> {
   const { data, error } = await supabase
     .from('teams')
-    .insert([team])
+    .insert([{
+      ...team,
+      is_onspot: team.is_onspot ?? false
+    }])
     .select()
     .single();
 
@@ -264,10 +289,20 @@ export async function fetchTeamMembers(teamId: string): Promise<TeamMember[]> {
 /**
  * Add member to team (user must own the team)
  */
-export async function addTeamMember(teamId: string, memberName: string): Promise<TeamMember> {
+export async function addTeamMember(
+  teamId: string, 
+  memberName: string,
+  memberEmail?: string,
+  memberPhone?: string
+): Promise<TeamMember> {
   const { data, error } = await supabase
     .from('team_members')
-    .insert([{ team_id: teamId, member_name: memberName }])
+    .insert([{ 
+      team_id: teamId, 
+      member_name: memberName,
+      member_email: memberEmail || null,
+      member_phone: memberPhone || null
+    }])
     .select()
     .single();
 
@@ -279,7 +314,10 @@ export async function addTeamMember(teamId: string, memberName: string): Promise
  * Add multiple members to team
  */
 export async function addTeamMembers(teamId: string, memberNames: string[]): Promise<TeamMember[]> {
-  const members = memberNames.map(name => ({ team_id: teamId, member_name: name }));
+  const members = memberNames.map(name => ({ 
+    team_id: teamId, 
+    member_name: name 
+  }));
   
   const { data, error } = await supabase
     .from('team_members')
@@ -303,8 +341,65 @@ export async function deleteTeamMember(memberId: string): Promise<void> {
 }
 
 // ============================================================
-// REGISTRATION DETAILS
+// REGISTRATIONS
 // ============================================================
+
+/**
+ * Create registration record
+ */
+export async function createRegistration(
+  teamId: string,
+  eventId: string,
+  userId: string
+): Promise<Registration> {
+  const { data, error } = await supabase
+    .from('registrations')
+    .insert([{
+      team_id: teamId,
+      event_id: eventId,
+      user_id: userId,
+      status: 'ACTIVE'
+    }])
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create registration: ${error.message}`);
+  return data;
+}
+
+/**
+ * Fetch user's registrations
+ */
+export async function fetchUserRegistrations(): Promise<Registration[]> {
+  const { data, error } = await supabase
+    .from('registrations')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to fetch registrations: ${error.message}`);
+  return data || [];
+}
+
+// ============================================================
+// REGISTRATION DETAILS - Extended Personal Info
+// ============================================================
+
+export interface RegistrationDetails {
+  id: string;
+  team_id: string;
+  team_leader_name: string;
+  full_name: string;
+  gender: string | null;
+  mobile_number: string;
+  email: string;
+  college_name: string | null;
+  city: string;
+  state: string;
+  department: string | null;
+  year_of_study: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 /**
  * Create registration details for a team
@@ -350,7 +445,7 @@ export async function fetchAllRegistrationDetails(): Promise<RegistrationDetails
 }
 
 // ============================================================
-// PAYMENTS
+// PAYMENTS - Manual Verification System
 // ============================================================
 
 /**
@@ -370,12 +465,40 @@ export async function fetchPayment(teamId: string): Promise<Payment | null> {
 }
 
 /**
- * Create payment record
+ * Fetch payment by ID
  */
-export async function createPayment(teamId: string, amount: number): Promise<Payment> {
+export async function fetchPaymentById(paymentId: string): Promise<Payment | null> {
   const { data, error } = await supabase
     .from('payments')
-    .insert([{ team_id: teamId, amount, status: 'unpaid' }])
+    .select('*')
+    .eq('id', paymentId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to fetch payment: ${error.message}`);
+  }
+  return data || null;
+}
+
+/**
+ * Create payment record (status: WAITING)
+ * Called after team creation - user pays externally, waits for admin verification
+ */
+export async function createPayment(
+  teamId: string,
+  eventId: string,
+  userId: string,
+  amount: number
+): Promise<Payment> {
+  const { data, error } = await supabase
+    .from('payments')
+    .insert([{ 
+      team_id: teamId,
+      event_id: eventId,
+      user_id: userId,
+      amount, 
+      status: 'WAITING'
+    }])
     .select()
     .single();
 
@@ -384,31 +507,63 @@ export async function createPayment(teamId: string, amount: number): Promise<Pay
 }
 
 /**
- * Update payment status (admin only - will be enforced by RLS)
+ * Submit payment proof (PENDING → WAITING)
+ * User uploads screenshot and transaction ID
  */
-export async function updatePaymentStatus(teamId: string, status: 'paid' | 'unpaid', paymentRef?: string): Promise<Payment> {
-  // Get the most recent payment for this team
-  const { data: payments, error: fetchError } = await supabase
-    .from('payments')
-    .select('*')
-    .eq('team_id', teamId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (fetchError) throw new Error(`Failed to fetch payment: ${fetchError.message}`);
-  if (!payments || payments.length === 0) throw new Error('No payment found for this team');
-
-  const paymentId = payments[0].id;
-
-  // Update the specific payment by ID
+export async function submitPaymentProof(
+  paymentId: string,
+  transactionId: string,
+  screenshotUrl: string
+): Promise<Payment> {
   const { data, error } = await supabase
     .from('payments')
-    .update({ status, payment_ref: paymentRef })
+    .update({ 
+      transaction_id: transactionId,
+      screenshot_url: screenshotUrl,
+      status: 'WAITING'
+    })
+    .eq('id', paymentId)
+    .eq('status', 'PENDING')  // Can only submit if currently PENDING
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to submit payment proof: ${error.message}`);
+  return data;
+}
+
+/**
+ * Approve payment (WAITING → APPROVED) - Admin only
+ */
+export async function approvePayment(paymentId: string, adminComment?: string): Promise<Payment> {
+  const { data, error } = await supabase
+    .from('payments')
+    .update({ 
+      status: 'APPROVED',
+      admin_comment: adminComment || 'Payment verified and approved'
+    })
     .eq('id', paymentId)
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to update payment: ${error.message}`);
+  if (error) throw new Error(`Failed to approve payment: ${error.message}`);
+  return data;
+}
+
+/**
+ * Reject payment (WAITING → REJECTED) - Admin only
+ */
+export async function rejectPayment(paymentId: string, adminComment: string): Promise<Payment> {
+  const { data, error } = await supabase
+    .from('payments')
+    .update({ 
+      status: 'REJECTED',
+      admin_comment: adminComment
+    })
+    .eq('id', paymentId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to reject payment: ${error.message}`);
   return data;
 }
 
@@ -428,7 +583,7 @@ export async function fetchAllPayments(): Promise<Payment[]> {
 /**
  * Fetch payments by status (admin only)
  */
-export async function fetchPaymentsByStatus(status: 'paid' | 'unpaid'): Promise<Payment[]> {
+export async function fetchPaymentsByStatus(status: PaymentStatus): Promise<Payment[]> {
   const { data, error } = await supabase
     .from('payments')
     .select('*')
@@ -439,8 +594,33 @@ export async function fetchPaymentsByStatus(status: 'paid' | 'unpaid'): Promise<
   return data || [];
 }
 
+/**
+ * Fetch pending payments with team details (admin dashboard)
+ */
+export async function fetchPendingPaymentsWithDetails(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('payments')
+    .select(`
+      *,
+      teams (
+        team_name,
+        college_name,
+        phone_number,
+        team_size
+      ),
+      events (
+        name
+      )
+    `)
+    .eq('status', 'WAITING')
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to fetch pending payments: ${error.message}`);
+  return data || [];
+}
+
 // ============================================================
-// TICKETS
+// TICKETS - Generated after payment approval
 // ============================================================
 
 /**
@@ -460,13 +640,43 @@ export async function fetchTicket(teamId: string): Promise<Ticket | null> {
 }
 
 /**
- * Create ticket for team (called after successful payment)
- * Ticket code is auto-generated by trigger
+ * Fetch ticket by ticket code
  */
-export async function createTicket(teamId: string, pdfUrl?: string): Promise<Ticket> {
+export async function fetchTicketByCode(ticketCode: string): Promise<Ticket | null> {
   const { data, error } = await supabase
     .from('tickets')
-    .insert([{ team_id: teamId, pdf_url: pdfUrl }])
+    .select('*')
+    .eq('ticket_code', ticketCode)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to fetch ticket: ${error.message}`);
+  }
+  return data || null;
+}
+
+/**
+ * Create ticket for team (Admin only - after payment approval)
+ * Ticket code is auto-generated by database trigger
+ */
+export async function createTicket(
+  teamId: string,
+  eventId: string,
+  userId: string,
+  paymentId: string,
+  qrCodeData?: string,
+  pdfUrl?: string
+): Promise<Ticket> {
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert([{ 
+      team_id: teamId,
+      event_id: eventId,
+      user_id: userId,
+      payment_id: paymentId,
+      qr_code_data: qrCodeData || null,
+      pdf_url: pdfUrl || null
+    }])
     .select()
     .single();
 
@@ -641,15 +851,17 @@ export async function fetchTeamDetails(teamId: string): Promise<any> {
 
 /**
  * Create on-spot registration (admin only)
+ * Creates team, members, payment (auto-approved), and ticket
  */
 export async function createOnSpotRegistration(
   eventId: string,
   teamName: string,
   collegeName: string,
+  phoneNumber: string,
   teamSize: number,
   memberNames: string[],
   amount: number
-): Promise<{ team: Team; members: TeamMember[]; payment: Payment }> {
+): Promise<{ team: Team; members: TeamMember[]; payment: Payment; ticket: Ticket }> {
   try {
     // Get the admin user's ID
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -660,22 +872,36 @@ export async function createOnSpotRegistration(
       event_id: eventId,
       team_name: teamName,
       college_name: collegeName,
+      phone_number: phoneNumber,
       team_size: teamSize,
-      created_by: user.id,
+      user_id: user.id,
       is_onspot: true,
     });
 
     // Add members
     const members = await addTeamMembers(team.id, memberNames);
 
-    // Create payment (auto-paid for on-spot)
-    const payment = await createPayment(team.id, amount);
-    await updatePaymentStatus(team.id, 'paid', `ONSPOT-${Date.now()}`);
+    // Create payment (directly approved for on-spot)
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .insert([{
+        team_id: team.id,
+        event_id: eventId,
+        user_id: user.id,
+        amount,
+        transaction_id: `ONSPOT-${Date.now()}`,
+        status: 'APPROVED',
+        admin_comment: 'On-spot registration - cash payment received'
+      }])
+      .select()
+      .single();
+
+    if (paymentError) throw new Error(`Failed to create payment: ${paymentError.message}`);
 
     // Create ticket
-    await createTicket(team.id);
+    const ticket = await createTicket(team.id, eventId, user.id, payment.id);
 
-    return { team, members, payment };
+    return { team, members, payment, ticket };
   } catch (error) {
     throw new Error(`Failed to create on-spot registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -691,8 +917,10 @@ export async function createOnSpotRegistration(
 export async function getRegistrationStats(): Promise<{
   totalRegistrations: number;
   totalParticipants: number;
-  paidRegistrations: number;
-  unpaidRegistrations: number;
+  approvedPayments: number;
+  pendingPayments: number;
+  waitingPayments: number;
+  rejectedPayments: number;
   totalRevenue: number;
   pendingRevenue: number;
 }> {
@@ -703,19 +931,20 @@ export async function getRegistrationStats(): Promise<{
     ]);
 
     const totalParticipants = teams.reduce((sum, team) => sum + team.team_size, 0);
-    
-    // Count ONLY verified paid payments (status === 'paid')
-    // 'created' and 'unpaid' statuses both count as pending
-    const paidPayments = payments.filter(p => p.status === 'paid');
-    const unpaidPayments = payments.filter(p => p.status !== 'paid'); // 'created' and 'unpaid'
+    const approvedPayments = payments.filter(p => p.status === 'APPROVED');
+    const pendingPayments = payments.filter(p => p.status === 'PENDING');
+    const waitingPayments = payments.filter(p => p.status === 'WAITING');
+    const rejectedPayments = payments.filter(p => p.status === 'REJECTED');
 
     return {
       totalRegistrations: teams.length,
       totalParticipants,
-      paidRegistrations: paidPayments.length,
-      unpaidRegistrations: unpaidPayments.length,
-      totalRevenue: paidPayments.reduce((sum, p) => sum + p.amount, 0),
-      pendingRevenue: unpaidPayments.reduce((sum, p) => sum + p.amount, 0),
+      approvedPayments: approvedPayments.length,
+      pendingPayments: pendingPayments.length,
+      waitingPayments: waitingPayments.length,
+      rejectedPayments: rejectedPayments.length,
+      totalRevenue: approvedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      pendingRevenue: waitingPayments.reduce((sum, p) => sum + Number(p.amount), 0),
     };
   } catch (error) {
     throw new Error(`Failed to fetch stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -729,7 +958,7 @@ export async function getEventStats(eventId: string): Promise<{
   eventName: string;
   totalTeams: number;
   totalParticipants: number;
-  paidTeams: number;
+  approvedTeams: number;
   revenue: number;
 }> {
   try {
@@ -741,17 +970,15 @@ export async function getEventStats(eventId: string): Promise<{
 
     if (!event) throw new Error('Event not found');
 
-    const eventPayments = payments.filter(p => 
-      teams.some(t => t.id === p.team_id)
-    );
-    const paidPayments = eventPayments.filter(p => p.status === 'paid');
+    const eventPayments = payments.filter(p => p.event_id === eventId);
+    const approvedPayments = eventPayments.filter(p => p.status === 'APPROVED');
 
     return {
       eventName: event.name,
       totalTeams: teams.length,
       totalParticipants: teams.reduce((sum, team) => sum + team.team_size, 0),
-      paidTeams: paidPayments.length,
-      revenue: paidPayments.reduce((sum, p) => sum + p.amount, 0),
+      approvedTeams: approvedPayments.length,
+      revenue: approvedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
     };
   } catch (error) {
     throw new Error(`Failed to fetch event stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -764,50 +991,145 @@ export async function getEventStats(eventId: string): Promise<{
  */
 export async function getUserRegistrations() {
   try {
+    // Fetch teams for the current user first (teams RLS should allow this)
     const { data: teams, error: teamsError } = await supabase
       .from('teams')
       .select(`
         id,
         team_name,
         college_name,
+        phone_number,
         team_size,
         created_at,
-        events (
-          name
-        ),
-        payments (
-          amount
-        ),
-        tickets (
-          ticket_code
-        ),
-        team_members (
-          member_name
-        )
+        events ( name, event_date, image_url ),
+        team_members ( member_name )
       `)
       .order('created_at', { ascending: false });
 
     if (teamsError) throw teamsError;
     if (!teams) return [];
 
+    const teamIds = teams.map((t: any) => t.id).filter(Boolean);
+
+    // Fetch payments and tickets separately to avoid multi-table join restrictions
+    let payments: any[] = [];
+    let tickets: any[] = [];
+
+    if (teamIds.length > 0) {
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('payments')
+        .select('*')
+        .in('team_id', teamIds as any[]);
+
+      if (paymentsError) console.warn('payments fetch error', paymentsError);
+      else payments = paymentsData || [];
+
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from('tickets')
+        .select('*')
+        .in('team_id', teamIds as any[]);
+
+      if (ticketsError) console.warn('tickets fetch error', ticketsError);
+      else tickets = ticketsData || [];
+    }
+
     return teams.map((team: any) => {
-      const payment = team.payments?.[0];
-      const ticket = team.tickets?.[0];
-      
+      const event = Array.isArray(team.events) ? team.events[0] : team.events;
+      const teamPayments = payments.filter((p) => p.team_id === team.id);
+      const payment = teamPayments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+      const ticket = tickets.find((tk) => tk.team_id === team.id);
+
       return {
         id: team.id,
-        event_name: team.events instanceof Array ? team.events[0]?.name || 'Unknown Event' : team.events?.name || 'Unknown Event',
+        event_name: event?.name || 'Unknown Event',
+        event_date: event?.event_date || null,
+        event_image: event?.image_url || null,
         team_name: team.team_name,
         college_name: team.college_name,
+        phone_number: team.phone_number,
         team_size: team.team_size,
         amount: payment?.amount || 0,
-        payment_status: payment?.status || 'unpaid',
+        payment_id: payment?.id || null,
+        payment_status: payment?.status || 'PENDING',
+        transaction_id: payment?.transaction_id || null,
+        screenshot_url: payment?.screenshot_url || null,
         ticket_code: ticket?.ticket_code || null,
+        qr_code_data: ticket?.qr_code_data || null,
         created_at: team.created_at,
         member_names: team.team_members?.map((m: any) => m.member_name) || [],
       };
     });
   } catch (error) {
-    throw new Error(`Failed to fetch user registrations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('getUserRegistrations error', error);
+    return [];
   }
+}
+
+// ============================================================
+// STORAGE - Payment Screenshots
+// ============================================================
+
+/**
+ * Upload payment screenshot to Supabase Storage
+ */
+export async function uploadPaymentScreenshot(
+  userId: string,
+  file: File
+): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}/${Date.now()}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from('payment-screenshots')
+    .upload(fileName, file);
+
+  if (error) throw new Error(`Failed to upload screenshot: ${error.message}`);
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('payment-screenshots')
+    .getPublicUrl(data.path);
+
+  return publicUrl;
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+/**
+ * Create audit log entry (system use)
+ */
+export async function createAuditLog(
+  adminEmail: string,
+  action: string,
+  targetType?: string,
+  targetId?: string,
+  details?: Record<string, any>
+): Promise<void> {
+  const { error } = await supabase
+    .from('audit_log')
+    .insert([{
+      admin_email: adminEmail,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details
+    }]);
+
+  if (error) console.error('Failed to create audit log:', error.message);
+}
+
+/**
+ * Fetch audit logs (admin only)
+ */
+export async function fetchAuditLogs(limit: number = 100): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to fetch audit logs: ${error.message}`);
+  return data || [];
 }

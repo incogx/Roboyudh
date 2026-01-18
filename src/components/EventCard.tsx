@@ -24,7 +24,7 @@ const EventCard = ({ event }: EventCardProps) => {
       {/* Event Image */}
       <div className="relative h-48 overflow-hidden bg-black">
         <img 
-          src={event.image_url} 
+          src={event.image_url || '/images/logo.png'} 
           alt={event.name}
           className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
         />
@@ -66,7 +66,7 @@ const EventCard = ({ event }: EventCardProps) => {
           <div className="flex items-center space-x-3">
             <IndianRupee className="w-5 h-5 text-cyan-400" />
             <span className="text-lg font-semibold text-white">
-              {event.price_per_head}
+              ₹{event.price_per_head}
               <span className="text-sm text-gray-400 ml-1">per person</span>
             </span>
           </div>
