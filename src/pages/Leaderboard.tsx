@@ -155,10 +155,10 @@ const Leaderboard = () => {
 
                     <div className="flex-1">
                       <h3 className="text-2xl font-bold text-white group-hover:text-cyan-400 transition-colors duration-300">
-                        {(entry.team as any)?.team_name || 'Unknown Team'}
+                        {entry.team?.team_name || 'Unknown Team'}
                       </h3>
                       <p className="text-gray-400 text-sm">
-                        {(entry.team as any)?.college_name || 'Unknown College'}
+                        {entry.team?.college_name || 'Unknown College'}
                       </p>
                     </div>
                   </div>

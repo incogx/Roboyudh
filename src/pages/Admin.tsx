@@ -1010,7 +1010,9 @@ const Admin = () => {
                         <label className="block text-cyan-400 font-semibold mb-2">Event</label>
                         <select
                           value={leaderboardForm.eventId}
-                          onChange={(e) => setLeaderboardForm({ ...leaderboardForm, eventId: e.target.value })}
+                          onChange={(e) => {
+                            setLeaderboardForm({ ...leaderboardForm, eventId: e.target.value, teamId: '' });
+                          }}
                           className="w-full px-4 py-2 bg-black border border-cyan-500/30 rounded-lg text-white focus:border-cyan-400"
                         >
                           <option value="">Select Event</option>
@@ -1026,15 +1028,34 @@ const Admin = () => {
                         <label className="block text-cyan-400 font-semibold mb-2">Team</label>
                         <select
                           value={leaderboardForm.teamId}
-                          onChange={(e) => setLeaderboardForm({ ...leaderboardForm, teamId: e.target.value })}
+                          onChange={(e) => {
+                            const selectedTeam = teams.find(t => t.id === e.target.value);
+                            if (selectedTeam) {
+                              setLeaderboardForm({
+                                ...leaderboardForm,
+                                teamId: e.target.value,
+                                eventId: selectedTeam.event_id,
+                              });
+                            } else {
+                              setLeaderboardForm({ ...leaderboardForm, teamId: e.target.value });
+                            }
+                          }}
                           className="w-full px-4 py-2 bg-black border border-cyan-500/30 rounded-lg text-white focus:border-cyan-400"
                         >
                           <option value="">Select Team</option>
-                          {teams.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.team_name}
-                            </option>
-                          ))}
+                          {leaderboardForm.eventId
+                            ? teams
+                                .filter((t) => t.event_id === leaderboardForm.eventId)
+                                .map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.team_name}
+                                  </option>
+                                ))
+                            : teams.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.team_name}
+                                </option>
+                              ))}
                         </select>
                       </div>
 

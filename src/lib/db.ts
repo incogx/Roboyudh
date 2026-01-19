@@ -731,7 +731,7 @@ export async function fetchLeaderboardWithTeams(eventId: string): Promise<Leader
       score,
       rank,
       updated_at,
-      teams:team_id (
+      team:team_id (
         id,
         team_name,
         college_name,
@@ -743,7 +743,12 @@ export async function fetchLeaderboardWithTeams(eventId: string): Promise<Leader
     .order('rank', { ascending: true });
 
   if (error) throw new Error(`Failed to fetch leaderboard: ${error.message}`);
-  return data || [];
+  
+  // Map teams to team field for compatibility
+  return (data || []).map((entry: any) => ({
+    ...entry,
+    team: entry.team || null,
+  }));
 }
 
 /**

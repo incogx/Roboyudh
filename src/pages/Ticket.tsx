@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { fetchTicket, fetchPayment, fetchUserTeams, Ticket as TicketType } from '../lib/db';
+import { fetchTicket, fetchPayment, fetchUserTeams } from '../lib/db';
 import { CheckCircle, Download, Calendar, Users, IndianRupee, QrCode } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
