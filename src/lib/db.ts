@@ -497,7 +497,7 @@ export async function createPayment(
       event_id: eventId,
       user_id: userId,
       amount, 
-      status: 'WAITING'
+      status: 'PENDING'
     }])
     .select()
     .single();
