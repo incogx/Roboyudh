@@ -1,6 +1,6 @@
 # ROBOYUDH 2026 - Event Management Platform
 
-**Live Event:** March 15-17, 2026  
+**Live Event:** February 26-27, 2026 
 **Admin:** abdulsist23@gmail.com  
 **Status:** ✅ Production Ready
 
@@ -207,7 +207,7 @@ npm run preview # Preview production build
 
 **Admin Email:** abdulsist23@gmail.com  
 **Supabase Project:** umidkzbqpfveovsxalcj  
-**Event Dates:** March 15-17, 2026
+**Event Dates:** February 26-27, 2026
 
 ---
 

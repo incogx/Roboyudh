@@ -24,80 +24,106 @@ const Footer = () => {
     'Dr. Geethanjali D, Associate Prof., CSE',
   ];
 
-  const studentTeams = [
-    {
-      title: 'Event 1',
-      people: [
-        'Jenna Therese – 3rd Year, CSE (AI & ML)',
-        'Kommi Lekha Sree – 3rd Year, CSE (Data Science)',
-        'Tissina Gold – 3rd Year, CSE (Data Science)',
-        'Vishnu K – 2nd Year, AI & ML',
-        'Gunashree – 2nd Year, AI & ML',
-      ],
-    },
-    {
-      title: 'Event 2',
-      people: [
-        'Ayesha – 3rd Year, AI',
-        'Guru Rishikesh – 3rd Year, AI',
-        'Hari Krishna – 3rd Year, AI',
-        'Goel Kishore – 3rd Year, AI',
-        'Ameer Suhail – 3rd Year, AI',
-      ],
-    },
-    {
-      title: 'Event 3',
-      people: [
-        'Thilgavathy N – 3rd Year, CSE (Data Science)',
-        'Ashvika K – 3rd Year, CSE (AI)',
-        'Indrika Manohari – 3rd Year, CSE (Data Science)',
-        'Praveen – 2nd Year, AI & ML',
-        'Naveen – 2nd Year, AI & ML',
-      ],
-    },
-    {
-      title: 'Event 4',
-      people: [
-        'Nitheesh T – 2nd Year, AI & ML',
-        'Charan Puvada – 3rd Year, Data Science',
-        'Ishwarya Ramesh – 2nd Year, Data Science',
-        'Mohammed Junaith Sulthan J – 2nd Year, AI & ML',
-        'Alphan Jenfus – 2nd Year, AI & ML',
-      ],
-    },
-    {
-      title: 'Event 5',
-      people: [
-        'Alvin Sudhan – 3rd Year, AI & ML',
-        'Vishwa V – 3rd Year, AI & ML',
-        'Kamali S – 3rd Year, AI',
-        'Sivaprasana BR – 2nd Year, AI & ML',
-        'Santhosh – 2nd Year, AI & ML',
-      ],
-    },
-    {
-      title: 'Media Team',
-      people: [
-        'Neil Sam – 2nd Year, CSE',
-        'Atharsh – 2nd Year, CSE',
-        'Rahul Rajan – 2nd Year, CSE',
-        'Reyan – 2nd Year, CSE',
-        'Yogesh – 2nd Year, CSE',
-      ],
-    },
-    {
-      title: 'Volunteering Team',
-      people: [
-        'Sathvikaa Sri – 3rd Year, CSE (DS) (H)',
-        'Subin Tony – 3rd Year, CSE (AI) (H)',
-        'Sandhiya – 1st Year, AI',
-        'Mukesh Gokul – 2nd Year, Data Science',
-        'Raj – 2nd Year, Data Science',
-        'Divya – 2nd Year, Data Science',
-        'Chakradhar – 2nd Year, AI & ML',
-      ],
-    },
-  ];
+ const eventOrganizers = [
+  'Lakshmi Narayanan – 4th Year, CSE (AI & Robotics)',
+  'Aneesh M – 4th Year, CSE (AI & Robotics)',
+  'Priyadharshini C – 4th Year, CSE (AI & Robotics)',
+  'Subashree – 4th Year, (Blockchain Technology)',
+];
+
+const eventHeads = [
+  'Naveen P – 3rd Year, CSE (Cyber Security)',
+  'Subasri Venkatesan – 3rd Year, CSE (Data Science)',
+  'J Abdul Kaif – 3rd Year, CSE (AI & Robotics)',
+];
+
+const studentTeams = [
+  {
+    title: 'Robo Sumo',
+    people: [
+      'Jenna Therese – 3rd Year, CSE (AI & ML)',
+      'Kommi Lekha Sree – 3rd Year, CSE (Data Science)',
+      'Tissina Gold – 3rd Year, CSE (Data Science)',
+      'Vishnu K – 2nd Year, CSE (AI & ML)',
+      'Gunashree – 2nd Year, CSE (AI & ML)',
+    ],
+  },
+  {
+    title: 'RC Racing',
+    people: [
+      'Ayesha – 3rd Year, CSE (Artificial Intelligence)',
+      'Guru Rishikesh – 3rd Year, CSE (Artificial Intelligence)',
+      'Hari Krishna – 3rd Year, CSE (Artificial Intelligence)',
+      'Goel Kishore – 3rd Year, CSE (Artificial Intelligence)',
+      'Ameer Suhail – 3rd Year, CSE (Artificial Intelligence)',
+    ],
+  },
+  {
+    title: 'Obstacle Run',
+    people: [
+      'Thilgavathy N – 3rd Year, CSE (Data Science)',
+      'Dharshana S J – 3rd Year, CSE (Artificial Intelligence)',
+      'Indrika Manohari – 3rd Year, CSE (Data Science)',
+      'Praveen – 2nd Year, CSE (AI & ML)',
+      'Naveen – 2nd Year, CSE (AI & ML)',
+    ],
+  },
+  {
+    title: 'Robo Soccer',
+    people: [
+      'Nitheesh T – 2nd Year, CSE (AI & ML)',
+      'Charan Puvada – 3rd Year, CSE (Data Science)',
+      'Ishwarya Ramesh – 2nd Year, CSE (Data Science)',
+      'Mohammed Junaith Sulthan J – 2nd Year, CSE (AI & ML)',
+      'Alphan Jenfus – 2nd Year, CSE (AI & ML)',
+    ],
+  },
+  {
+    title: 'Line Follower',
+    people: [
+      'Alvin Sudhan – 3rd Year, CSE (AI & ML)',
+      'Vishwa V – 3rd Year, CSE (AI & ML)',
+      'Kamali S – 3rd Year, CSE (Artificial Intelligence)',
+      'Sivaprasana BR – 2nd Year, CSE (AI & ML)',
+      'Santhosh – 2nd Year, CSE (AI & ML)',
+    ],
+  },
+  {
+    title: 'Game Verse',
+    people: [
+      'Dharani – 3rd Year, CSE (Internet of Things)',
+      'Sudhiksha – 3rd Year, CSE (Internet of Things)',
+      'Farah Fathima – 3rd Year, CSE (Internet of Things)',
+      'Buvan Shankar – 2nd Year, CSE (Cyber Security)',
+      'Jose Christopher – 2nd Year, CSE (Cyber Security)',
+      'Anisa Farha – 2nd Year, CSE (Cyber Security)',
+    ],
+  },
+  {
+    title: 'Media Team',
+    people: [
+      'Neil Sam – 2nd Year, CSE',
+      'Atharsh – 2nd Year, CSE',
+      'Rahul Rajan – 2nd Year, CSE',
+      'Reyan – 2nd Year, CSE',
+      'Yogesh – 2nd Year, CSE',
+    ],
+  },
+  {
+    title: 'Volunteering Team',
+    people: [
+      'Sathvikaa Sri – 3rd Year, CSE (Data Science)',
+      'Subin Tony – 3rd Year, CSE (Artificial Intelligence)',
+      'Sandhiya – 1st Year, CSE (Artificial Intelligence)',
+      'Mukesh Gokul – 2nd Year, CSE (Data Science)',
+      'Raj – 2nd Year, CSE (Data Science)',
+      'Divya – 2nd Year, CSE (Data Science)',
+      'Chakradhar – 2nd Year, CSE (AI & ML)',
+    ],
+  },
+];
+
+
 
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({});
 
@@ -188,6 +214,26 @@ const Footer = () => {
               <h5 className="text-cyan-100 font-semibold mb-3 text-base uppercase tracking-wide">Faculty Coordinators</h5>
               <ul className="space-y-2 text-gray-100 text-sm">
                 {facultyCoordinators.map((person) => (
+                  <li key={person} className="leading-snug">
+                    {person}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-gradient-to-r from-slate-900 to-slate-950 border-2 border-cyan-300/30 rounded-2xl p-5 shadow-xl shadow-cyan-500/15 text-center">
+              <h5 className="text-cyan-100 font-semibold mb-3 text-base uppercase tracking-wide">Event Organizers</h5>
+              <ul className="space-y-2 text-gray-100 text-sm">
+                {eventOrganizers.map((person) => (
+                  <li key={person} className="leading-snug">
+                    {person}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-gradient-to-r from-slate-900 to-slate-950 border-2 border-cyan-300/30 rounded-2xl p-5 shadow-xl shadow-cyan-500/15 text-center">
+              <h5 className="text-cyan-100 font-semibold mb-3 text-base uppercase tracking-wide">Event Heads</h5>
+              <ul className="space-y-2 text-gray-100 text-sm">
+                {eventHeads.map((person) => (
                   <li key={person} className="leading-snug">
                     {person}
                   </li>
