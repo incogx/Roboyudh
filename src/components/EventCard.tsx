@@ -61,14 +61,19 @@ const EventCard = ({ event }: EventCardProps) => {
         <div className="space-y-3 mb-6">
           <div className="flex items-center space-x-3 text-gray-300">
             <Users className="w-5 h-5 text-cyan-400" />
-            <span className="text-sm">Max {event.max_team_size} members</span>
+            {event.name === 'Game Verse' ? (
+              <span className="text-sm">Exactly 2 members</span>
+            ) : (
+              <span className="text-sm">Max {event.max_team_size} members</span>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <IndianRupee className="w-5 h-5 text-cyan-400" />
-            <span className="text-lg font-semibold text-white">
-              ₹{event.price_per_head}
-              <span className="text-sm text-gray-400 ml-1">per person</span>
-            </span>
+            {event.name === 'Game Verse' ? (
+              <span className="text-lg font-semibold text-white">₹200<span className="text-sm text-gray-400 ml-1"> per team</span></span>
+            ) : (
+              <span className="text-lg font-semibold text-white">₹{event.price_per_head}<span className="text-sm text-gray-400 ml-1"> per person</span></span>
+            )}
           </div>
         </div>
 
@@ -81,7 +86,15 @@ const EventCard = ({ event }: EventCardProps) => {
             Register Now
           </Link>
           <Link 
-            to={`/events/${event.id}`}
+            to={
+              event.name === 'RC Racing' ? '/details/rc-racing' :
+              event.name === 'Robo Sumo' ? '/details/robo-sumo' :
+              event.name === 'Obstacle Run' ? '/details/obstacle-run' :
+              event.name === 'Robo Soccer' ? '/details/robo-soccer' :
+              event.name === 'Game Verse' ? '/details/game-verse' :
+              event.name === 'Line Follower' ? '/details/line-follower' :
+              '/events/' + event.id
+            }
             className="px-4 py-3 border border-cyan-500/30 text-cyan-400 font-semibold rounded-lg hover:bg-cyan-500/10 hover:border-cyan-400/50 transition-all duration-300"
           >
             Details

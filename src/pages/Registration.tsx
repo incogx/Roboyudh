@@ -98,30 +98,37 @@ const Registration = () => {
     // Team Details
     if (!formData.teamName.trim()) newErrors.teamName = 'Team name is required';
     if (!formData.teamLeaderName.trim()) newErrors.teamLeaderName = 'Team leader name is required';
-    
+
     // Personal Details
     if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required';
     if (!formData.mobileNumber.trim()) newErrors.mobileNumber = 'Mobile number is required';
     else if (!validatePhone(formData.mobileNumber)) newErrors.mobileNumber = 'Mobile number must be 10 digits';
-    
+
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!validateEmail(formData.email)) newErrors.email = 'Invalid email format';
-    
+
     if (!formData.collegeName.trim()) newErrors.collegeName = 'College name is required';
     if (!formData.city.trim()) newErrors.city = 'City is required';
     if (!formData.state.trim()) newErrors.state = 'State is required';
-    
+
     // Academic Details
     if (!formData.department.trim()) newErrors.department = 'Department is required';
     if (!formData.yearOfStudy) newErrors.yearOfStudy = 'Year of study is required';
-    
+
     // Declarations
     if (!formData.declareTrue) newErrors.declareTrue = 'You must confirm the details are true';
     if (!formData.agreeRules) newErrors.agreeRules = 'You must agree to follow event rules';
-    
-    // Team members - at least team leader
+
+    // Team members validation
     const validMembers = formData.teamMembers.filter(m => m.trim());
-    if (validMembers.length === 0) newErrors.teamMembers = 'Add at least one team member';
+    if (selectedEvent?.name === 'Game Verse') {
+      if (validMembers.length !== 2) {
+        newErrors.teamMembers = 'Game Verse requires exactly 2 members (excluding leader)';
+      }
+    } else {
+      if (validMembers.length === 0) newErrors.teamMembers = 'Add at least one team member';
+      if (validMembers.length > 4) newErrors.teamMembers = 'Maximum 5 members allowed (including leader)';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -141,6 +148,7 @@ const Registration = () => {
   };
 
   const addMemberField = () => {
+    if (selectedEvent?.name === 'Game Verse') return; // No add for Game Verse
     if (formData.teamMembers.length < (selectedEvent?.max_team_size || 5)) {
       setFormData(prev => ({
         ...prev,
@@ -150,6 +158,7 @@ const Registration = () => {
   };
 
   const removeMemberField = (index: number) => {
+    if (selectedEvent?.name === 'Game Verse') return; // No remove for Game Verse
     if (formData.teamMembers.length > 1) {
       setFormData(prev => ({
         ...prev,
@@ -208,7 +217,10 @@ const Registration = () => {
       });
 
       // Step 5: Create payment record (status: PENDING)
-      const totalAmount = totalTeamSize * selectedEvent.price_per_head;
+      let totalAmount = totalTeamSize * selectedEvent.price_per_head;
+      if (selectedEvent.name === 'Game Verse') {
+        totalAmount = 200;
+      }
       const payment = await createPayment(team.id, selectedEvent.id, user!.id, totalAmount);
 
       // Store in session storage for payment page
@@ -364,7 +376,9 @@ const Registration = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-3">
-                    Team Members (Max {selectedEvent.max_team_size}) <span className="text-red-400">*</span>
+                    {selectedEvent.name === 'Game Verse'
+                      ? 'Team Members (Exactly 2 required)' 
+                      : `Team Members (Max ${selectedEvent.max_team_size})`} <span className="text-red-400">*</span>
                   </label>
                   <div className="space-y-2">
                     {formData.teamMembers.map((member, index) => (
@@ -390,7 +404,7 @@ const Registration = () => {
                   </div>
                   {errors.teamMembers && <p className="text-red-400 text-sm mt-2">{errors.teamMembers}</p>}
                   
-                  {formData.teamMembers.length < selectedEvent.max_team_size && (
+                  {selectedEvent.name !== 'Game Verse' && formData.teamMembers.length < selectedEvent.max_team_size && (
                     <button
                       type="button"
                       onClick={addMemberField}

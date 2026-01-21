@@ -32,9 +32,11 @@ const Footer = () => {
 ];
 
 const eventHeads = [
-  'Naveen P – 3rd Year, CSE (Cyber Security)',
+  'Naveen Kumar P – 3rd Year, CSE (Cyber Security)',
+  'Dharani – 3rd Year, CSE (Internet of Things)',
   'Subasri Venkatesan – 3rd Year, CSE (Data Science)',
   'J Abdul Kaif – 3rd Year, CSE (AI & Robotics)',
+  
 ];
 
 const studentTeams = [
@@ -43,9 +45,9 @@ const studentTeams = [
     people: [
       'Jenna Therese – 3rd Year, CSE (AI & ML)',
       'Kommi Lekha Sree – 3rd Year, CSE (Data Science)',
-      'Tissina Gold – 3rd Year, CSE (Data Science)',
+      'Tissina Gold TS– 3rd Year, CSE (Data Science)',
       'Vishnu K – 2nd Year, CSE (AI & ML)',
-      'Gunashree – 2nd Year, CSE (AI & ML)',
+      'Gunasree – 2nd Year, CSE (AI & ML)',
     ],
   },
   {
@@ -61,8 +63,8 @@ const studentTeams = [
   {
     title: 'Obstacle Run',
     people: [
-      'Thilgavathy N – 3rd Year, CSE (Data Science)',
-      'Dharshana S J – 3rd Year, CSE (Artificial Intelligence)',
+      'Thilagavathy N – 3rd Year, CSE (Data Science)',
+      'Dharshana S J – 3rd Year, CSE (AI & ML)',
       'Indrika Manohari – 3rd Year, CSE (Data Science)',
       'Praveen – 2nd Year, CSE (AI & ML)',
       'Naveen – 2nd Year, CSE (AI & ML)',
@@ -84,14 +86,13 @@ const studentTeams = [
       'Alvin Sudhan – 3rd Year, CSE (AI & ML)',
       'Vishwa V – 3rd Year, CSE (AI & ML)',
       'Kamali S – 3rd Year, CSE (Artificial Intelligence)',
-      'Sivaprasana BR – 2nd Year, CSE (AI & ML)',
+      'Sivaprasanna BR – 2nd Year, CSE (AI & ML)',
       'Santhosh – 2nd Year, CSE (AI & ML)',
     ],
   },
   {
     title: 'Game Verse',
     people: [
-      'Dharani – 3rd Year, CSE (Internet of Things)',
       'Sudhiksha – 3rd Year, CSE (Internet of Things)',
       'Farah Fathima – 3rd Year, CSE (Internet of Things)',
       'Buvan Shankar – 2nd Year, CSE (Cyber Security)',
