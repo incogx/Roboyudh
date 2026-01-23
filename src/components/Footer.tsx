@@ -6,7 +6,6 @@ const Footer = () => {
     'Dr. Mariazeena Johnson, Chancellor',
     'Dr. Maria Johnson, President',
     'Dr. Maria Catherine Johnson, Vice President',
-    'Mr. R. Akash, Vice President',
   ];
 
   const convenors = [
