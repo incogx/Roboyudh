@@ -5,7 +5,7 @@ const Footer = () => {
   const chiefPatrons = [
     'Dr. Mariazeena Johnson, Chancellor',
     'Dr. Maria Johnson, President',
-    'Dr. Maria Catherine Johnson, Vice President',
+    'Ms. Maria Catherine Johnson, Vice President',
   ];
 
   const convenors = [
@@ -46,17 +46,17 @@ const studentTeams = [
       'Kommi Lekha Sree – 3rd Year, CSE (Data Science)',
       'Tissina Gold TS– 3rd Year, CSE (Data Science)',
       'Vishnu K – 2nd Year, CSE (AI & ML)',
-      'Gunasree – 2nd Year, CSE (AI & ML)',
+      'Gunasree K – 2nd Year, CSE (AI & ML)',
     ],
   },
   {
     title: 'RC Racing',
     people: [
-      'Ayesha – 3rd Year, CSE (Artificial Intelligence)',
-      'Guru Rishikesh – 3rd Year, CSE (Artificial Intelligence)',
-      'Hari Krishna – 3rd Year, CSE (Artificial Intelligence)',
-      'Goel Kishore – 3rd Year, CSE (Artificial Intelligence)',
-      'Ameer Suhail – 3rd Year, CSE (Artificial Intelligence)',
+      'Ayesha Begum F – 3rd Year, CSE (Artificial Intelligence)',
+      'Guru Rishikesh T – 3rd Year, CSE (Artificial Intelligence)',
+      'Hari Krishna T – 3rd Year, CSE (Artificial Intelligence)',
+      'Goel Kishore S– 3rd Year, CSE (Artificial Intelligence)',
+      'Ameer Suhail A– 3rd Year, CSE (Artificial Intelligence)',
     ],
   },
   {
@@ -64,26 +64,26 @@ const studentTeams = [
     people: [
       'Thilagavathy N – 3rd Year, CSE (Data Science)',
       'Dharshana S J – 3rd Year, CSE (AI & ML)',
-      'Indrika Manohari – 3rd Year, CSE (Data Science)',
-      'Praveen – 2nd Year, CSE (AI & ML)',
-      'Naveen – 2nd Year, CSE (AI & ML)',
+      'Indrika Manohari S – 3rd Year, CSE (Data Science)',
+      'Praveen K – 2nd Year, CSE (AI & ML)',
+      'Naveen G – 2nd Year, CSE (AI & ML)',
     ],
   },
   {
     title: 'Robo Soccer',
     people: [
       'Nitheesh T – 2nd Year, CSE (AI & ML)',
-      'Charan Puvada – 3rd Year, CSE (Data Science)',
+      'Sri Charan Puvvada – 3rd Year, CSE (Data Science)',
       'Ishwarya Ramesh – 2nd Year, CSE (Data Science)',
       'Mohammed Junaith Sulthan J – 2nd Year, CSE (AI & ML)',
-      'Alphan Jenfus – 2nd Year, CSE (AI & ML)',
+      'Alphan Jenfus J – 2nd Year, CSE (AI & ML)',
     ],
   },
   {
     title: 'Line Follower',
     people: [
       'Alvin Sudhan – 3rd Year, CSE (AI & ML)',
-      'Vishwa V – 3rd Year, CSE (AI & ML)',
+      'Affan Khan – 3rd Year, CSE (AI & ML)',
       'Kamali S – 3rd Year, CSE (Artificial Intelligence)',
       'Sivaprasanna BR – 2nd Year, CSE (AI & ML)',
       'Santhosh – 2nd Year, CSE (AI & ML)',
@@ -172,7 +172,7 @@ const studentTeams = [
             <h4 className="text-lg font-semibold text-cyan-400 mb-4">Follow Us</h4>
             <div className="flex space-x-4">
               {[
-                { Icon: Instagram, href: 'https://www.instagram.com/sathyabama.official?igsh=Yjh5bWlibHBwaTlt' },
+                { Icon: Instagram, href: 'https://www.instagram.com/roboyudh_26?utm_source=qr&igsh=amUzczRibnFpYTN3' },
               ].map(({ Icon, href }, index) => (
                 <a
                   key={index}

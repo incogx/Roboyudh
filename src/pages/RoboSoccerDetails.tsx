@@ -1,4 +1,3 @@
-import React from 'react';
 import { Trophy, Zap, Users, FileText, Shield } from 'lucide-react';
 
 const RoboSoccerDetails = () => (

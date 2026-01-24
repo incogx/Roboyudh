@@ -24,23 +24,46 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-black">
+      {/* Hero Video Section */}
+      <section className="relative w-full flex items-center justify-center overflow-hidden mt-24 md:mt-32" style={{ aspectRatio: '16/7', minHeight: '350px', maxHeight: '60vh' }}>
+        <video
+          className="absolute inset-0 w-full h-full object-cover z-0"
+          src="/video/Roboyudh_Intro.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster="/images/roboyudh-poster.jpg"
+        />
+        {/* Overlay for style only, no text */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/80 z-10"></div>
+
+      </section>
+
+
+      {/* Overlap the badge over the video for a premium effect */}
+      <div className="relative z-30 flex justify-center" style={{ marginTop: '-2.5rem' }}>
+        <div className="mb-8 inline-block animate-fade-in-down">
+          <div className="flex items-center justify-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 border border-cyan-400/40 rounded-full backdrop-blur-sm shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-300 hover:scale-105">
+            <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
+            <span className="text-cyan-400 text-sm md:text-base font-semibold uppercase tracking-wider">
+              National Level Event
+            </span>
+            <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
+          </div>
+        </div>
+      </div>
+
+      {/* Decorative Backgrounds */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-20 -left-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute top-1/3 -right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
         <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      <section className="relative min-h-screen flex items-center justify-center px-4 pt-24">
-        <div className="max-w-6xl mx-auto text-center">
-          <div className="mb-8 inline-block animate-fade-in-down">
-            <div className="flex items-center justify-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 border border-cyan-400/40 rounded-full backdrop-blur-sm shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-300 hover:scale-105">
-              <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
-              <span className="text-cyan-400 text-sm md:text-base font-semibold uppercase tracking-wider">
-                National Level Event
-              </span>
-              <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
-            </div>
-          </div>
+      {/* Main Content */}
+      <section className="relative min-h-screen flex items-center justify-center px-4 pt-8">
+        <div className="max-w-6xl mx-auto text-center -mt-12 md:-mt-16">
 
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black mb-6 leading-tight animate-fade-in-up">
             <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-purple-500 text-transparent bg-clip-text animate-gradient drop-shadow-[0_0_30px_rgba(34,211,238,0.5)]">
@@ -121,11 +144,6 @@ const Home = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-          <div className="w-8 h-12 border-2 border-cyan-400/50 rounded-full flex items-start justify-center p-2">
-            <div className="w-1 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
-          </div>
-        </div>
       </section>
 
       <section className="relative py-20 px-4 bg-gradient-to-b from-black via-gray-900/50 to-black">
@@ -176,7 +194,7 @@ const Home = () => {
                 >
                   <div className="relative w-full h-48 overflow-hidden">
                     <img 
-                      src={event.image_url} 
+                      src={event.image_url ?? undefined} 
                       alt={event.name}
                       className="w-full h-full object-contain bg-black transition-transform duration-300 group-hover:scale-110"
                     />

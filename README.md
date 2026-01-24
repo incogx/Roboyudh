@@ -1,226 +1,264 @@
-# ROBOYUDH 2026 - Event Management Platform
+🚀 ROBOYUDH 2026 – Event Registration & Manual Payment System
 
-**Live Event:** February 26-27, 2026 
-**Admin:** abdulsist23@gmail.com  
-**Status:** ✅ Production Ready
+A secure, login-only, admin-verified event registration platform designed for real-world college tech fests where manual payment confirmation is safer than automated gateways.
 
----
+⚠️ Important:
+This system intentionally does NOT use Razorpay or any auto-payment gateway.
+All payments are manually verified by admin to avoid financial and technical risks.
 
-## 🚀 Quick Start
+🧠 SYSTEM PHILOSOPHY
 
-### 1. Run Database Setup
-Open Supabase: https://supabase.com/dashboard/project/umidkzbqpfveovsxalcj/sql
+Zero trust on frontend
 
-Copy and run: `sql/FRESH_COMPLETE_SETUP.sql`
+Database is the single source of truth
 
-Verify with: `VERIFY_SETUP.sql`
+Admin approval = final authority
 
-### 2. Start Development Server
-```bash
-npm install
-npm run dev
-```
+No auto ticket generation
 
-### 3. Deploy to Vercel
-```bash
-git push origin main
-```
+Reload-safe pages (no 404s)
 
-Add environment variables in Vercel:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_RAZORPAY_KEY_ID`
+Simple > Complex > Risky
 
----
+🔐 AUTHENTICATION RULES
 
-## 📁 Project Structure
+User must be logged in to:
 
-```
-src/
-├── pages/           # Main pages
-│   ├── Home.tsx
-│   ├── Events.tsx
-│   ├── Registration.tsx
-│   ├── Payment.tsx
-│   ├── MyRegistrations.tsx
-│   └── Admin.tsx
-├── components/      # Reusable components
-├── lib/
-│   ├── supabase.ts  # Supabase client
-│   ├── db.ts        # Database functions
-│   └── razorpay.ts  # Payment integration
-└── context/
-    └── AuthContext.tsx  # Authentication
+Register for events
 
-sql/
-└── FRESH_COMPLETE_SETUP.sql  # Main database setup
+Ooffline Money Collection 
 
-VERIFY_SETUP.sql  # Database verification
-```
+View ticket
 
----
+If user is not logged in:
+→ Redirect to /login
 
-## 🎪 Events
+No anonymous registration
 
-1. **RC Racing** - ₹200 (Tech, 5 members)
-2. **Robo Soccer** - ₹200 (Tech, 5 members)
-3. **Line Follower** - ₹200 (Tech, 5 members)
-4. **Obstacle Run** - ₹200 (Tech, 5 members)
-5. **Robo Sumo** - ₹200 (Tech, 5 members)
-6. **Game Verse** - ₹100 (Non-Tech, 1 member)
+No guest payment
 
----
+No bypass allowed
 
-## 🔐 Authentication
+👤 USER FLOW (STRICT & FINAL)
+1️⃣ Login
 
-- **Email OTP** (no passwords)
-- **Admin:** abdulsist23@gmail.com
-- **Users:** Any valid email
+User logs in using Supabase Auth.
 
-### Login Flow:
-1. Enter email → Get OTP
-2. Enter OTP → Session created
-3. Admin gets full access
-4. Users see their own data only
+2️⃣ Select Event
 
----
+User chooses an event from available events.
 
-## 💳 Payment Integration
+3️⃣ Register Team
 
-### TEST Mode (Current)
-- **Razorpay Key:** TEST mode
-- **Test Card:** `4111 1111 1111 1111`
-- CVV: `123`, Expiry: `12/25`
+User fills:
 
-### LIVE Mode (Before Event)
-1. Get LIVE key from Razorpay
-2. Update `.env.local`:
-   ```
-   VITE_RAZORPAY_KEY_ID=rzp_live_YOUR_KEY
-   ```
-3. Update Vercel environment variables
+Team name
 
----
+Team members
 
-## 🗄️ Database
+Contact phone number
 
-### Tables (7 total):
-- `events` - Event details
-- `teams` - Registered teams
-- `team_members` - Team member names
-- `payments` - Payment records
-- `tickets` - Generated tickets
-- `leaderboard` - Scores & ranks
-- `registration_details` - User info
+System creates:
 
-### Security:
-- **RLS enabled** on all tables
-- Users can only see their own data
-- Admin can see everything
-- 18+ security policies active
+Team
 
----
+Registration
 
-## 🎫 User Flow
+Payment record (status = PENDING)
 
-1. **Browse Events** → `/events`
-2. **Register** → Fill form with team details
-3. **Payment** → Razorpay integration
-   - Status: UNPAID (orange badge)
-   - Click "Complete Payment"
-   - Enter TEST card details
-4. **Ticket Generated** → After successful payment
-   - Status: PAID (green badge)
-   - Download ticket button
-5. **My Registrations** → View all tickets
 
----
+“Payment submitted. Waiting for admin confirmation.”
 
-## 👨‍💼 Admin Features
+🚫 No ticket generated yet
 
-Access: `/admin` (login with `abdulsist23@gmail.com`)
 
-- View all teams & registrations
-- Export CSV
-- Manage leaderboard
-- Create on-spot registrations
-- Update scores & ranks
 
----
+🧑‍💼 ADMIN FLOW (SINGLE ADMIN)
+Admin Email
+abdulsist23@gmail.com
 
-## 🔧 Development
 
-### Environment Variables (.env.local)
-```env
-VITE_SUPABASE_URL=https://umidkzbqpfveovsxalcj.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key
-VITE_RAZORPAY_KEY_ID=rzp_test_S3gyXCDMb8Z7XE
-```
+Only this account has admin access.
 
-### Build & Deploy
-```bash
-npm run build   # Build for production
-npm run preview # Preview production build
-```
+Admin Dashboard Shows
 
----
+Event name
 
-## ✅ Features
+Team name
 
-- [x] Event registration system
-- [x] Razorpay payment integration
-- [x] Email OTP authentication
-- [x] Ticket generation (only after payment)
-- [x] Admin dashboard
-- [x] CSV export
-- [x] Leaderboard management
-- [x] Row Level Security (RLS)
-- [x] Responsive design
-- [x] PDF ticket download
+User phone number 📞
 
----
+Payment screenshot
 
-## 🚨 Important Notes
+Transaction ID
 
-### Database Setup:
-- Run `sql/FRESH_COMPLETE_SETUP.sql` ONLY ONCE
-- This deletes all old data and creates fresh setup
-- Never run after users start registering
+Amount
 
-### Payment Security:
-- Tickets ONLY created after payment
-- Payment status tracked (paid/unpaid)
-- Download button only for paid tickets
+Payment status
 
-### Testing Checklist:
-- [ ] Events display correctly (6 total)
-- [ ] Registration creates team
-- [ ] Payment modal opens
-- [ ] TEST card payment works
-- [ ] Ticket generated after payment
-- [ ] Admin login works
-- [ ] CSV export works
+Admin Actions
+✅ APPROVE
 
----
+Payment status → APPROVED
 
-## 📞 Support
+Ticket generated
 
-**Admin Email:** abdulsist23@gmail.com  
-**Supabase Project:** umidkzbqpfveovsxalcj  
-**Event Dates:** February 26-27, 2026
+QR code created
 
----
+Ticket unlocked for user
 
-## 🎉 Ready to Deploy!
+Confirmation email sent
 
-**Status:** ✅ All features working  
-**TypeScript Errors:** 0  
-**Database:** Clean setup ready  
-**Payment:** Configured and tested  
-**Deployment:** Vercel ready  
+❌ REJECT
 
-**Next Step:** Push to GitHub and deploy to Vercel!
+Payment status → REJECTED
 
----
+No ticket generated
 
-**Built with:** React 18 + TypeScript + Vite + Tailwind CSS + Supabase + Razorpay
+User cannot re-submit
+
+Decision is final
+
+🎟️ TICKET SYSTEM
+
+Ticket is generated ONLY after admin approval.
+
+Each ticket includes:
+
+Ticket Code
+
+QR Code
+
+Event Name
+
+Team Name
+
+Transaction ID
+
+Features:
+
+PDF download
+
+Reload-safe
+
+One team → one ticket
+
+One payment → one ticket
+
+🗄️ DATABASE DESIGN (NEW & CLEAN)
+Tables Used
+
+users
+
+events
+
+teams
+
+team_members
+
+registrations
+
+payments
+
+tickets
+
+Payment Status ENUM
+PENDING
+APPROVED
+REJECTED
+
+
+❌ No Razorpay fields
+❌ No auto-verification
+❌ No gateway callbacks
+
+🔒 SECURITY GUARANTEES
+
+Admin is the only authority to approve payment
+
+Screenshot + transaction ID stored securely
+
+Phone number visible only to admin
+
+No frontend-based approval
+
+No duplicate payments per team
+
+No duplicate tickets
+
+🔁 RELOAD SAFETY
+
+All pages are server-state driven
+
+Reloading:
+
+/payment
+
+/ticket
+
+/admin
+will NEVER cause:
+
+404 errors
+
+Lost data
+
+Broken flow
+
+🚫 WHAT THIS SYSTEM WILL NEVER USE
+
+❌ Razorpay
+
+❌ Auto capture
+
+❌ Webhooks
+
+❌ Signature verification
+
+❌ Client-side payment trust
+
+❌ Session-only logic
+
+❌ Multiple admins
+
+✅ WHY THIS SYSTEM IS SAFE
+
+No dependency on payment gateways
+
+No money auto-accepted
+
+No race conditions
+
+No replay attacks
+
+No gateway downtime risk
+
+Perfect for college events & offline verification
+
+📦 TECH STACK
+
+Frontend: React + Vite
+
+Backend: Vercel Serverless
+
+Database: Supabase (Postgres + RLS)
+
+Auth: Supabase Auth
+
+Storage: Supabase Storage
+
+QR & PDF: Server-side generation
+
+🏁 FINAL VERDICT
+
+This system is:
+
+✅ Safer than Razorpay for college events
+
+✅ Admin-controlled
+
+✅ Reload-safe
+
+✅ Audit-friendly
+
+✅ Production-ready
