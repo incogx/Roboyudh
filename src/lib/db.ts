@@ -1,3 +1,52 @@
+// ============================================================
+// ADMIN - HARD DELETE TEAM AND ALL RELATED DATA
+// ============================================================
+
+/**
+ * Permanently delete a team and all related data (admin only)
+ * This will remove:
+ *   - team_members
+ *   - registration_details
+ *   - registrations
+ *   - payments
+ *   - tickets
+ *   - leaderboard entries
+ *   - the team itself
+ * No audit log or reason is required.
+ */
+export async function deleteTeamAndRelatedData(teamId: string): Promise<void> {
+  // Delete order: team_members, registration_details, registrations, payments, tickets, leaderboard, team
+  // All errors are thrown immediately if any step fails
+  // (Assumes admin RLS bypass)
+  // 1. Delete team_members
+  let error;
+  ({ error } = await supabase.from('team_members').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete team members: ${error.message}`);
+
+  // 2. Delete registration_details
+  ({ error } = await supabase.from('registration_details').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete registration details: ${error.message}`);
+
+  // 3. Delete registrations
+  ({ error } = await supabase.from('registrations').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete registrations: ${error.message}`);
+
+  // 4. Delete payments
+  ({ error } = await supabase.from('payments').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete payments: ${error.message}`);
+
+  // 5. Delete tickets
+  ({ error } = await supabase.from('tickets').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete tickets: ${error.message}`);
+
+  // 6. Delete leaderboard entries
+  ({ error } = await supabase.from('leaderboard').delete().eq('team_id', teamId));
+  if (error) throw new Error(`Failed to delete leaderboard entries: ${error.message}`);
+
+  // 7. Delete the team itself
+  ({ error } = await supabase.from('teams').delete().eq('id', teamId));
+  if (error) throw new Error(`Failed to delete team: ${error.message}`);
+}
 /**
  * Database Helper Functions for ROBOYUDH 2026
  * Provides type-safe Supabase queries with RLS security built-in

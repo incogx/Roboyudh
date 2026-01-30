@@ -14,6 +14,7 @@ import {
   approvePayment,
   rejectPayment,
   createTicket,
+  deleteTeamAndRelatedData,
   Event,
   Team,
   Payment,
@@ -35,10 +36,10 @@ import {
   ChevronDown,
   XCircle,
   Mail,
-  Image,
-  ExternalLink,
   Loader2,
+  Trash2,
 } from 'lucide-react';
+
 
 interface DashboardStats {
   totalRegistrations: number;
@@ -730,7 +731,7 @@ const Admin = () => {
                                   }
                                 })()}
                               </td>
-                              <td className="py-4 px-6">
+                              <td className="py-4 px-6 flex gap-2">
                                 <button
                                   onClick={() => handleExpandTeam(team.id)}
                                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500/20 transition-all font-medium"
@@ -738,7 +739,50 @@ const Admin = () => {
                                   <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                   {loadingMembers === team.id ? 'Loading...' : 'Details'}
                                 </button>
+                                <button
+                                  onClick={() => setDeletingTeamId(team.id)}
+                                  className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg hover:bg-red-500/20 transition-all font-medium"
+                                  title="Delete Team"
+                                  disabled={deletingTeamId === team.id}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
                               </td>
+                                  {/* Delete Team Modal */}
+                                  {deletingTeamId && (
+                                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                                      <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6 max-w-md w-full">
+                                        <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+                                          <Trash2 className="w-5 h-5" />
+                                          Delete Team
+                                        </h3>
+                                        <p className="text-gray-400 text-sm mb-4">
+                                          Are you sure you want to <span className="text-red-400 font-bold">permanently delete</span> this team and all its data? This action <span className="font-bold">cannot be undone</span>.
+                                        </p>
+                                        <div className="flex gap-3">
+                                          <button
+                                            onClick={() => setDeletingTeamId(null)}
+                                            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteTeam(deletingTeamId)}
+                                            disabled={deletingTeamId === null}
+                                            className="flex-1 px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 font-semibold hover:bg-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                          >
+                                            {deletingTeamId ? (
+                                              <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                              <Trash2 className="w-4 h-4" />
+                                            )}
+                                            Delete Team
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                             </tr>
 
                             {/* Expanded Details Row */}
