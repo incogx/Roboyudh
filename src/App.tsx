@@ -9,7 +9,7 @@ import Registration from './pages/Registration';
 import Ticket from './pages/Ticket';
 import MyRegistrations from './pages/MyRegistrations';
 import Leaderboard from './pages/Leaderboard';
-import { Admin } from './pages/Admin';
+import Admin from './pages/Admin';
 import Login from './pages/Login';
 import RC_RacingDetails from './pages/RC_RacingDetails';
 import RoboSumoDetails from './pages/RoboSumoDetails';
