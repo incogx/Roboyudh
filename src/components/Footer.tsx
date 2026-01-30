@@ -24,10 +24,13 @@ const Footer = () => {
   ];
 
  const eventOrganizers = [
-  'Lakshmi Narayanan – 4th Year, CSE (AI & Robotics)',
+  "Lakshmi Narayanan – 4th Year, CSE (AI & Robotics)",
   'Aneesh M – 4th Year, CSE (AI & Robotics)',
+  'Harish K – 4th Year, CSE (AI & Robotics)',
+  'Lokeshwar D – 4th Year, CSE (AI & Robotics)',
+  'Ashwin A – 4th Year, CSE (AI & Robotics)',
   'Priyadharshini C – 4th Year, CSE (AI & Robotics)',
-  'Subashree – 4th Year, (Blockchain Technology)',
+  'Suba Shree T – 4th Year, BCT'
 ];
 
 const eventHeads = [

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Calendar, MapPin, Trophy, Users, Zap, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { fetchEvents, Event } from '../lib/db';
+import CountdownTimer from '../components/CountdownTimer';
 
 const Home = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -75,6 +76,7 @@ const Home = () => {
             </span>
           </h1>
 
+
           <p className="text-lg sm:text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto animate-fade-in leading-relaxed">
             National Level Intercollege Tech Event
           </p>
@@ -82,6 +84,11 @@ const Home = () => {
           <p className="text-base sm:text-lg text-cyan-400 mb-8 animate-fade-in-delay font-medium">
             Sathyabama Institute of Science and Technology
           </p>
+
+          {/* Countdown Timer Card */}
+          <div className="mb-10 animate-fade-in-up">
+            <CountdownTimer targetDate="2026-02-26T00:00:00" />
+          </div>
 
           <div className="flex flex-wrap justify-center gap-6 mb-12">
             <div className="flex items-center space-x-3 px-6 py-3 bg-gray-900/50 border border-cyan-500/20 rounded-lg backdrop-blur-sm">

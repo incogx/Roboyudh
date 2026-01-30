@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface PaymentData {
   id: string;
@@ -21,11 +21,7 @@ interface EventData {
   price_per_head: number;
 }
 
-interface TeamData {
-  team_name: string;
-  college_name: string;
-  team_size: number;
-}
+
 
 const Payment: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -35,12 +31,8 @@ const Payment: React.FC = () => {
 
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [event, setEvent] = useState<EventData | null>(null);
-  const [team, setTeam] = useState<TeamData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [eventCategory, setEventCategory] = useState<string>('');
-  const [teamSize, setTeamSize] = useState<number>(1);
-  const [pricePerHead, setPricePerHead] = useState<number>(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPaymentDetails = async (): Promise<void> => {
@@ -86,25 +78,9 @@ const Payment: React.FC = () => {
 
         if (eventData) {
           setEvent(eventData);
-          setEventCategory(eventData.category);
-          setPricePerHead(eventData.price_per_head);
         }
 
-        // Fetch team
-        const { data: teamData } = await supabase
-          .from('teams')
-          .select('team_name, college_name, team_size')
-          .eq('id', paymentData.team_id)
-          .single();
 
-        if (teamData) {
-          setTeam(teamData);
-          setTeamSize(teamData.team_size);
-        }
-
-        if (teamData) {
-          setTeam(teamData);
-        }
 
         setLoading(false);
       } catch (err) {

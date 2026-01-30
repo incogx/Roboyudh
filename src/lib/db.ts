@@ -1056,8 +1056,7 @@ export async function getUserRegistrations() {
         amount: payment?.amount || 0,
         payment_id: payment?.id || null,
         payment_status: payment?.status || 'PENDING',
-        transaction_id: payment?.transaction_id || null,
-        screenshot_url: payment?.screenshot_url || null,
+        // transaction_id and screenshot_url removed
         ticket_code: ticket?.ticket_code || null,
         qr_code_data: ticket?.qr_code_data || null,
         created_at: team.created_at,
@@ -1070,33 +1069,7 @@ export async function getUserRegistrations() {
   }
 }
 
-// ============================================================
-// STORAGE - Payment Screenshots
-// ============================================================
 
-/**
- * Upload payment screenshot to Supabase Storage
- */
-export async function uploadPaymentScreenshot(
-  userId: string,
-  file: File
-): Promise<string> {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}/${Date.now()}.${fileExt}`;
-
-  const { data, error } = await supabase.storage
-    .from('payment-screenshots')
-    .upload(fileName, file);
-
-  if (error) throw new Error(`Failed to upload screenshot: ${error.message}`);
-
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from('payment-screenshots')
-    .getPublicUrl(data.path);
-
-  return publicUrl;
-}
 
 // ============================================================
 // AUDIT LOG

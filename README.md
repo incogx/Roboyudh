@@ -1,264 +1,162 @@
-🚀 ROBOYUDH 2026 – Event Registration & Manual Payment System
+🏆 ROBOYUDH 2026 – Event Registration System
 
-A secure, login-only, admin-verified event registration platform designed for real-world college tech fests where manual payment confirmation is safer than automated gateways.
+Roboyudh 2026 is a college tech-fest event registration platform designed with secure login, team-based registration, and offline payment collection handled by admins on the event day.
 
-⚠️ Important:
-This system intentionally does NOT use Razorpay or any auto-payment gateway.
-All payments are manually verified by admin to avoid financial and technical risks.
+This system intentionally does NOT use online payments, payment proof uploads, or QR payment flows to avoid payment failures, fraud, and operational complexity.
 
-🧠 SYSTEM PHILOSOPHY
+🚀 Key Principles (NON-NEGOTIABLE)
 
-Zero trust on frontend
+🔐 Login required for registration (no guest entries)
 
-Database is the single source of truth
+👥 Team-based registration
 
-Admin approval = final authority
+💰 NO online payment
+❌ NO payment proof upload
+❌ NO QR payment flows
 
-No auto ticket generation
+🧾 Payment collected offline on event day
 
-Reload-safe pages (no 404s)
+🧑‍💼 Admin-only payment approval
 
-Simple > Complex > Risky
+🎟️ Ticket generated ONLY after admin approval
 
-🔐 AUTHENTICATION RULES
+❌ No Razorpay, No UPI QR, No screenshots, No transaction IDs, No payment uploads
 
-User must be logged in to:
-
-Register for events
-
-Ooffline Money Collection 
-
-View ticket
-
-If user is not logged in:
-→ Redirect to /login
-
-No anonymous registration
-
-No guest payment
-
-No bypass allowed
-
-👤 USER FLOW (STRICT & FINAL)
-1️⃣ Login
-
-User logs in using Supabase Auth.
-
-2️⃣ Select Event
-
-User chooses an event from available events.
-
+🧭 User Flow (Student / Participant)
+1️⃣ Login using OTP / Magic Link
+2️⃣ Select an Event
 3️⃣ Register Team
+   - Team details
+   - Team members
+4️⃣ Registration completed
+5️⃣ Payment status = PENDING
+6️⃣ Message shown:
+   "Please pay the registration fee at the event desk on the event day."
+7️⃣ Ticket NOT generated yet
 
-User fills:
+👉 The user does nothing online after registration. No payment upload, no verification UI, no online payment step.
 
-Team name
+🧑‍💼 Admin Flow (Event Organizer)
+1️⃣ Admin logs in
+2️⃣ Opens Admin Dashboard
+3️⃣ Views all registrations
+4️⃣ On event day:
+   - Collects payment (cash / UPI)
+   - Verifies team
+5️⃣ Clicks "MARK AS PAID"
+6️⃣ System actions:
+   - payment.status → APPROVED
+   - Ticket generated automatically
+   - PDF created
 
-Team members
+🎟️ Ticket Rules
 
-Contact phone number
+One ticket per team
 
-System creates:
+Ticket generated only after admin marks payment as APPROVED
 
-Team
-
-Registration
-
-Payment record (status = PENDING)
-
-
-“Payment submitted. Waiting for admin confirmation.”
-
-🚫 No ticket generated yet
-
-
-
-🧑‍💼 ADMIN FLOW (SINGLE ADMIN)
-Admin Email
-abdulsist23@gmail.com
-
-
-Only this account has admin access.
-
-Admin Dashboard Shows
+Ticket includes:
 
 Event name
 
 Team name
 
-User phone number 📞
+Unique ticket code
 
-Payment screenshot
 
-Transaction ID
 
-Amount
+🗄️ Database Design Overview
+Core Tables
 
-Payment status
+events – Event details
 
-Admin Actions
-✅ APPROVE
+teams – Team registration
 
-Payment status → APPROVED
+team_members – Individual members
 
-Ticket generated
+registrations – User ↔ Event mapping
 
-QR code created
+payments – Offline payment tracking (status: PENDING/APPROVED/REJECTED)
 
-Ticket unlocked for user
+tickets – Entry ticket (post payment)
 
-Confirmation email sent
+audit_log – Admin action tracking
 
-❌ REJECT
+Payment Status Lifecycle
+Status	Meaning
+PENDING	Registered, payment not yet collected
+APPROVED	Payment collected & verified by admin
+REJECTED	Registration cancelled
+🔒 Security Model
 
-Payment status → REJECTED
+RLS (Row Level Security) enabled on all tables
 
-No ticket generated
+Users can only access their own data
 
-User cannot re-submit
+Admin access strictly email-based
 
-Decision is final
+No client-side payment manipulation
 
-🎟️ TICKET SYSTEM
+No financial trust on frontend
 
-Ticket is generated ONLY after admin approval.
+🛠️ Tech Stack
 
-Each ticket includes:
+Frontend: React + TypeScript + Vite
 
-Ticket Code
+Backend: Supabase (PostgreSQL + Auth + RLS)
 
-QR Code
+Hosting: Vercel
 
-Event Name
+Auth: OTP / Magic Link
 
-Team Name
+Payments: Offline (Manual)
 
-Transaction ID
+🧪 Environment Variables
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 
-Features:
 
-PDF download
+⚠️ No payment keys required.
 
-Reload-safe
+🧹 What Is Intentionally NOT Included
 
-One team → one ticket
+❌ Online payment gateways
 
-One payment → one ticket
+❌ QR payment flows
 
-🗄️ DATABASE DESIGN (NEW & CLEAN)
-Tables Used
 
-users
+❌ Screenshot uploads
+❌ Payment proof uploads
 
-events
+❌ Auto-verification
 
-teams
+❌ QR payment flows
 
-team_members
+❌ Razorpay / Stripe / UPI logic
 
-registrations
+This is by design. All payment is offline, admin approval only. No payment upload, no verification UI, no QR, no online payment.
 
-payments
-
-tickets
-
-Payment Status ENUM
-PENDING
-APPROVED
-REJECTED
-
-
-❌ No Razorpay fields
-❌ No auto-verification
-❌ No gateway callbacks
-
-🔒 SECURITY GUARANTEES
-
-Admin is the only authority to approve payment
-
-Screenshot + transaction ID stored securely
-
-Phone number visible only to admin
-
-No frontend-based approval
-
-No duplicate payments per team
-
-No duplicate tickets
-
-🔁 RELOAD SAFETY
-
-All pages are server-state driven
-
-Reloading:
-
-/payment
-
-/ticket
-
-/admin
-will NEVER cause:
-
-404 errors
-
-Lost data
-
-Broken flow
-
-🚫 WHAT THIS SYSTEM WILL NEVER USE
-
-❌ Razorpay
-
-❌ Auto capture
-
-❌ Webhooks
-
-❌ Signature verification
-
-❌ Client-side payment trust
-
-❌ Session-only logic
-
-❌ Multiple admins
-
-✅ WHY THIS SYSTEM IS SAFE
-
-No dependency on payment gateways
-
-No money auto-accepted
-
-No race conditions
-
-No replay attacks
-
-No gateway downtime risk
-
-Perfect for college events & offline verification
-
-📦 TECH STACK
-
-Frontend: React + Vite
-
-Backend: Vercel Serverless
-
-Database: Supabase (Postgres + RLS)
-
-Auth: Supabase Auth
-
-Storage: Supabase Storage
-
-QR & PDF: Server-side generation
-
-🏁 FINAL VERDICT
-
-This system is:
-
-✅ Safer than Razorpay for college events
-
-✅ Admin-controlled
-
-✅ Reload-safe
-
-✅ Audit-friendly
+📌 Deployment Status
 
 ✅ Production-ready
+✅ Safe to deploy
+✅ Admin-controlled
+✅ Event-day friendly
+
+👤 Admin Account
+
+Admin Email: abdulsist23@gmail.com
+
+Admin rights are strictly enforced via database policies.
+
+📣 Final Note
+
+This system is built specifically for college tech fests where:
+
+Payments are easier to collect offline
+
+Admin verification is mandatory
+
+Reliability matters more than automation
+
+Simple. Secure. Scalable.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
   createTeam, 
@@ -221,27 +221,29 @@ const Registration = () => {
       if (selectedEvent.name === 'Game Verse') {
         totalAmount = 200;
       }
-      const payment = await createPayment(team.id, selectedEvent.id, user!.id, totalAmount);
+      await createPayment(team.id, selectedEvent.id, user!.id, totalAmount);
 
-      // Store in session storage for payment page
-      sessionStorage.setItem(
-        'registrationData',
-        JSON.stringify({
-          team_id: team.id,
-          payment_id: payment.id,
-          eventName: selectedEvent.name,
-          teamName: formData.teamName,
-          collegeName: formData.collegeName,
-          teamSize: totalTeamSize,
-          memberNames: allMembers,
-          amount: totalAmount,
-          paymentStatus: 'PENDING',
-          createdAt: new Date().toISOString(),
-        })
-      );
-
-      // Redirect to payment page
-      navigate(`/payment?id=${payment.id}`);
+      // Show success message and offline payment instructions
+      setError('');
+      setIsSubmitting(false);
+      setFormData({
+        teamName: '',
+        teamLeaderName: '',
+        teamMembers: ['', '', ''],
+        fullName: '',
+        gender: '',
+        mobileNumber: '',
+        email: '',
+        collegeName: '',
+        city: '',
+        state: '',
+        department: '',
+        yearOfStudy: '',
+        declareTrue: false,
+        agreeRules: false,
+      });
+      alert('Registration successful! Please pay the registration fee at the event desk on the event day. Your ticket will be generated after admin approval.');
+      navigate('/my-registrations');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       // Check for duplicate registration error
@@ -618,12 +620,12 @@ const Registration = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="w-5 h-5 inline-block animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></span>
                     Processing...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="w-5 h-5 inline-block bg-green-400 rounded-full"></span>
                     Register Now
                   </>
                 )}

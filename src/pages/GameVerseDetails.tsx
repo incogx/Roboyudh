@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const GameVerseDetails = () => (
   <div className="max-w-3xl mx-auto p-8">

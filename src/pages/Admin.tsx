@@ -45,7 +45,6 @@ interface DashboardStats {
   totalParticipants: number;
   approvedPayments: number;
   pendingPayments: number;
-  waitingPayments: number;
   rejectedPayments: number;
   totalRevenue: number;
   pendingRevenue: number;
@@ -570,17 +569,13 @@ const Admin = () => {
 
                 <div className="p-6 bg-gradient-to-br from-gray-900 to-black border border-cyan-500/20 rounded-xl">
                   <h3 className="text-xl font-bold text-cyan-400 mb-4">Payment Status</h3>
-                  <div className="grid md:grid-cols-4 gap-4">
+                  <div className="grid md:grid-cols-3 gap-4">
                     <div className="p-4 bg-black/50 rounded-lg">
                       <p className="text-gray-400 text-sm mb-2">Approved</p>
                       <p className="text-2xl font-bold text-green-400">{stats.approvedPayments}</p>
                     </div>
                     <div className="p-4 bg-black/50 rounded-lg">
-                      <p className="text-gray-400 text-sm mb-2">Awaiting Review</p>
-                      <p className="text-2xl font-bold text-yellow-400">{stats.waitingPayments}</p>
-                    </div>
-                    <div className="p-4 bg-black/50 rounded-lg">
-                      <p className="text-gray-400 text-sm mb-2">Pending Upload</p>
+                      <p className="text-gray-400 text-sm mb-2">Pending</p>
                       <p className="text-2xl font-bold text-orange-400">{stats.pendingPayments}</p>
                     </div>
                     <div className="p-4 bg-black/50 rounded-lg">
@@ -884,42 +879,13 @@ const Admin = () => {
                                           </div>
                                         </div>
                                         
-                                        {/* Payment Verification Panel - Only for WAITING status */}
-                                        {payment?.status === 'WAITING' && (
+                                        {/* Payment Approval Panel - Only for PENDING status */}
+                                        {payment?.status === 'PENDING' && (
                                           <div className="md:col-span-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
                                             <h4 className="text-yellow-400 font-semibold mb-4 text-sm uppercase flex items-center gap-2">
                                               <AlertCircle className="w-4 h-4" />
-                                              Payment Verification Required
+                                              Payment Collected - Generate Ticket
                                             </h4>
-                                            
-                                            <div className="grid md:grid-cols-2 gap-4">
-                                              {/* Payment Screenshot */}
-                                              <div>
-                                                <p className="text-gray-400 text-sm mb-2">Payment Screenshot:</p>
-                                                {payment.screenshot_url ? (
-                                                  <button
-                                                    onClick={() => setScreenshotModal(payment.screenshot_url)}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-cyan-400 hover:bg-cyan-500/30 transition-all"
-                                                  >
-                                                    <Image className="w-4 h-4" />
-                                                    View Screenshot
-                                                    <ExternalLink className="w-3 h-3" />
-                                                  </button>
-                                                ) : (
-                                                  <span className="text-red-400 text-sm">No screenshot uploaded</span>
-                                                )}
-                                              </div>
-                                              
-                                              {/* Transaction Details */}
-                                              <div>
-                                                <p className="text-gray-400 text-sm mb-2">Transaction ID / UTR:</p>
-                                                <code className="bg-black/50 px-3 py-2 rounded text-white font-mono block">
-                                                  {payment.transaction_id || 'Not provided'}
-                                                </code>
-                                              </div>
-                                            </div>
-                                            
-                                            {/* Action Buttons */}
                                             <div className="flex gap-3 mt-4">
                                               <button
                                                 onClick={() => handleApprovePayment(payment, team, extendedData?.email || '')}
@@ -931,7 +897,7 @@ const Admin = () => {
                                                 ) : (
                                                   <CheckCircle className="w-4 h-4" />
                                                 )}
-                                                Approve & Generate Ticket
+                                                Generate Ticket
                                               </button>
                                               <button
                                                 onClick={() => setShowRejectModal(payment.id)}
@@ -942,10 +908,9 @@ const Admin = () => {
                                                 Reject
                                               </button>
                                             </div>
-                                            
                                             <p className="text-gray-500 text-xs mt-3 flex items-center gap-1">
                                               <Mail className="w-3 h-3" />
-                                              Email notification will be sent to: {extendedData?.email || 'N/A'}
+                                              Ticket will be available to the team after approval.
                                             </p>
                                           </div>
                                         )}
