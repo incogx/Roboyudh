@@ -36,6 +36,10 @@ export default function MyRegistrations() {
   useEffect(() => {
     if (user) {
       loadRegistrations();
+      
+      // Auto-refresh every 10 seconds to check for admin approval & new tickets
+      const interval = setInterval(loadRegistrations, 10000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
@@ -110,6 +114,13 @@ export default function MyRegistrations() {
           </h1>
           <div className="w-24 h-1 bg-gradient-to-r from-cyan-500 to-blue-600 mx-auto mb-6"></div>
           <p className="text-xl text-gray-400">View and download your event tickets</p>
+          <button
+            onClick={loadRegistrations}
+            disabled={loading}
+            className="mt-4 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Refreshing...' : 'Refresh Tickets'}
+          </button>
         </div>
 
         {registrations.length === 0 ? (
