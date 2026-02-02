@@ -22,33 +22,39 @@ interface SendEmailParams {
  */
 export async function sendEmailNotification(params: SendEmailParams): Promise<{ success: boolean; error?: string }> {
   try {
+    console.log('📧 sendEmailNotification called with:', { to: params.to, type: params.type });
+    
     // Get current session
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {
+      console.error('❌ No active session found');
       throw new Error('No active session');
     }
 
-    // Call the Edge Function
+    console.log('✅ Session found, calling Edge Function...');
+
+    // Call the Edge Function - Supabase handles auth automatically
     const { data, error } = await supabase.functions.invoke('send-email', {
-      body: params,
-      headers: {
-        Authorization: `Bearer ${session.access_token}`
-      }
+      body: params
     });
 
+    console.log('📧 Edge Function response:', { dataSuccess: data?.success, error: error?.message });
+
     if (error) {
-      console.error('Edge function error:', error);
+      console.error('❌ Edge function error:', error);
       return { success: false, error: error.message };
     }
 
     if (!data || !data.success) {
+      console.error('❌ Email sending failed:', data?.error);
       return { success: false, error: data?.error || 'Unknown error' };
     }
 
+    console.log('✅ Email sent successfully!');
     return { success: true };
   } catch (err) {
-    console.error('Email service error:', err);
+    console.error('❌ Email service error:', err);
     return { 
       success: false, 
       error: err instanceof Error ? err.message : 'Failed to send email' 
