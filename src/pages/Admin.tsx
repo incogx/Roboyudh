@@ -926,12 +926,6 @@ const Admin = () => {
                                                 {payment?.status || 'PENDING'}
                                               </span>
                                             </div>
-                                            {payment?.transaction_id && (
-                                              <div className="flex justify-between">
-                                                <span className="text-gray-400">Transaction ID:</span>
-                                                <span className="text-white font-mono text-xs">{payment.transaction_id}</span>
-                                              </div>
-                                            )}
                                           </div>
                                         </div>
                                         

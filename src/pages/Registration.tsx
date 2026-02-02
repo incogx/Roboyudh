@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, AlertCircle, Copy, RotateCcw } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
   createTeam, 
@@ -82,7 +82,6 @@ const Registration = () => {
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedMember, setExpandedMember] = useState<number | null>(0);
-  const [hasSavedData, setHasSavedData] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -90,12 +89,6 @@ const Registration = () => {
       return;
     }
   }, [user, authLoading, navigate]);
-
-  // Check if there's saved data on component mount
-  useEffect(() => {
-    const savedData = loadFormFromLocalStorage();
-    setHasSavedData(!!savedData);
-  }, []);
 
   // Auto-save form data to localStorage whenever it changes
   useEffect(() => {
@@ -220,44 +213,6 @@ const Registration = () => {
       };
       return { ...prev, teamMembers: newMembers };
     });
-  };
-
-  // Copy team leader details to all other members
-  const handleCopyLeaderToOthers = () => {
-    const leaderDetails = formData.teamMembers[0];
-    if (!leaderDetails.full_name) {
-      alert('Please fill in team leader details first');
-      return;
-    }
-
-    setFormData(prev => {
-      const newMembers = [...prev.teamMembers];
-      for (let i = 1; i < newMembers.length; i++) {
-        newMembers[i] = {
-          ...leaderDetails
-        };
-      }
-      return { ...prev, teamMembers: newMembers };
-    });
-    alert('Team leader details copied to all members!');
-  };
-
-  // Load saved form data
-  const handleLoadSavedData = () => {
-    const savedData = loadFormFromLocalStorage();
-    if (savedData) {
-      setFormData(savedData);
-      alert('Previous data loaded successfully!');
-    }
-  };
-
-  // Clear saved form data
-  const handleClearSavedData = () => {
-    if (window.confirm('Are you sure you want to clear all saved data?')) {
-      clearFormFromLocalStorage();
-      setHasSavedData(false);
-      alert('Saved data cleared!');
-    }
   };
 
   const validateForm = (): boolean => {
@@ -467,7 +422,6 @@ const Registration = () => {
 
       // Clear localStorage after successful registration
       clearFormFromLocalStorage();
-      setHasSavedData(false);
 
       // Show success message
       setError('');

@@ -491,7 +491,7 @@ export async function addTeamMembers(teamId: string, memberDetails: TeamMemberIn
   // If all members already exist, return existing members
   if (newMembers.length === 0) {
     console.warn(`All members already exist in team ${teamId}. Returning existing members.`);
-    return existingMembers || [];
+    return (existingMembers as TeamMember[]) || [];
   }
 
   // ========== BUILD MEMBER OBJECTS WITH STRICT VALIDATION ==========
@@ -543,10 +543,10 @@ export async function addTeamMembers(teamId: string, memberDetails: TeamMemberIn
 
   if (allMembersResult.error) {
     console.warn('Could not fetch all members after insert:', allMembersResult.error);
-    return data; // Return at least what we inserted
+    return (data as TeamMember[]) || []; // Return at least what we inserted
   }
 
-  return allMembersResult.data || [];
+  return (allMembersResult.data as TeamMember[]) || [];
 }
 
 /**
@@ -1085,8 +1085,13 @@ export async function createOnSpotRegistration(
       is_onspot: true,
     });
 
-    // Add members
-    const members = await addTeamMembers(team.id, memberNames);
+    // Add members - convert names to TeamMemberInput objects
+    const memberInputs: TeamMemberInput[] = memberNames.map(name => ({
+      member_name: name,
+      member_email: '', // Placeholder for on-spot registration
+      member_phone: '', // Placeholder for on-spot registration
+    }));
+    const members = await addTeamMembers(team.id, memberInputs);
 
     // Create payment (directly approved for on-spot)
     const { data: payment, error: paymentError } = await supabase
