@@ -188,10 +188,19 @@ serve(async (req) => {
     console.log('📧 Received email request for:', emailData.to, 'Type:', emailData.type)
 
     // Validate required fields
-    if (!emailData.to || !emailData.type || !emailData.teamName || !emailData.eventName || !emailData.eventDate) {
-      console.error('❌ Missing required fields')
+    if (!emailData.to || !emailData.type || !emailData.teamName || !emailData.eventName) {
+      console.error('❌ Missing required fields: to, type, teamName, eventName')
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, type, teamName, eventName, eventDate' }), 
+        JSON.stringify({ error: 'Missing required fields: to, type, teamName, eventName' }), 
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // For approval emails, eventDate is required
+    if (emailData.type === 'approval' && !emailData.eventDate) {
+      console.error('❌ eventDate missing for approval email')
+      return new Response(
+        JSON.stringify({ error: 'eventDate is required for approval emails' }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
