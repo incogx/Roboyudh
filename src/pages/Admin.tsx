@@ -866,7 +866,7 @@ const Admin = () => {
                                         <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
                                           <h4 className="text-cyan-400 font-semibold mb-4 text-sm uppercase">Academic & Payment Info</h4>
                                           <div className="space-y-2 text-sm">
-                                            {extendedData && (
+                                            {extendedData ? (
                                               <>
                                                 {extendedData.department && (
                                                   <div className="flex justify-between">
