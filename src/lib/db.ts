@@ -132,7 +132,7 @@ export interface Ticket {
   user_id: string;
   payment_id: string;
   ticket_code: string;
-  qr_code_data: string | null;
+  ticket_pdf_url: string | null;
   created_at: string;
 }
 
@@ -873,8 +873,7 @@ export async function createTicket(
       event_id: eventId,
       user_id: userId,
       payment_id: paymentId,
-      ticket_code: ticketCode,
-      qr_code_data: null
+      ticket_code: ticketCode
     }])
     .select()
     .single();
@@ -884,12 +883,12 @@ export async function createTicket(
 }
 
 /**
- * Update ticket QR code
+ * Update ticket PDF URL
  */
-export async function updateTicketQrCode(ticketId: string, qrCodeData: string): Promise<Ticket> {
+export async function updateTicketPdfUrl(ticketId: string, pdfUrl: string): Promise<Ticket> {
   const { data, error } = await supabase
     .from('tickets')
-    .update({ qr_code_data: qrCodeData })
+    .update({ ticket_pdf_url: pdfUrl })
     .eq('id', ticketId)
     .select()
     .single();
@@ -1259,7 +1258,7 @@ export async function getUserRegistrations() {
         payment_status: payment?.status || 'PENDING',
         // transaction_id and screenshot_url removed
         ticket_code: ticket?.ticket_code || null,
-        qr_code_data: ticket?.qr_code_data || null,
+        ticket_pdf_url: ticket?.ticket_pdf_url || null,
         created_at: team.created_at,
         member_names: team.team_members?.map((m: any) => m.member_name) || [],
       };
