@@ -85,14 +85,13 @@ export interface Event {
 export interface Team {
   id: string;
   event_id: string;
-  user_id: string;  // Changed from created_by
+  user_id: string;
   team_name: string;
   college_name: string;
-  phone_number: string;  // Required field
+  phone_number: string;
   team_size: number;
   is_onspot: boolean;
   created_at: string;
-  updated_at: string;
 }
 
 export interface TeamMember {
