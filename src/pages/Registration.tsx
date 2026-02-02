@@ -65,6 +65,14 @@ const Registration = () => {
       const event = events.find(e => e.id === selectedEventId);
       if (event) {
         setSelectedEvent(event);
+        // Initialize team members based on event type
+        if (event.name === 'GameVerse' || event.name === 'Game Verse') {
+          // GameVerse: 1 leader + 1 member = 2 total
+          setFormData(prev => ({ ...prev, teamMembers: [''] }));
+        } else {
+          // Other events: Initialize with 3 fields for convenience
+          setFormData(prev => ({ ...prev, teamMembers: ['', '', ''] }));
+        }
       }
     }
   }, [selectedEventId, events]);
@@ -121,13 +129,22 @@ const Registration = () => {
 
     // Team members validation
     const validMembers = formData.teamMembers.filter(m => m.trim());
-    if (selectedEvent?.name === 'Game Verse') {
-      if (validMembers.length !== 2) {
-        newErrors.teamMembers = 'Game Verse requires exactly 2 members (excluding leader)';
+    const totalTeamSize = 1 + validMembers.length; // Leader + additional members
+    
+    if (selectedEvent?.name === 'GameVerse' || selectedEvent?.name === 'Game Verse') {
+      if (totalTeamSize !== 2) {
+        newErrors.teamMembers = 'GameVerse requires exactly 2 members total (1 leader + 1 member)';
       }
     } else {
-      if (validMembers.length === 0) newErrors.teamMembers = 'Add at least one team member';
-      if (validMembers.length > 4) newErrors.teamMembers = 'Maximum 5 members allowed (including leader)';
+      if (validMembers.length === 0) {
+        newErrors.teamMembers = 'Add at least 1 team member (minimum 2 members total including leader)';
+      }
+      if (totalTeamSize > 5) {
+        newErrors.teamMembers = 'Maximum 5 members allowed (including leader)';
+      }
+      if (totalTeamSize < 2) {
+        newErrors.teamMembers = 'Minimum 2 members required (including leader)';
+      }
     }
 
     setErrors(newErrors);
@@ -217,10 +234,8 @@ const Registration = () => {
       });
 
       // Step 5: Create payment record (status: PENDING)
-      let totalAmount = totalTeamSize * selectedEvent.price_per_head;
-      if (selectedEvent.name === 'Game Verse') {
-        totalAmount = 200;
-      }
+      // Calculate total amount: team_size × price_per_head
+      const totalAmount = totalTeamSize * selectedEvent.price_per_head;
       await createPayment(team.id, selectedEvent.id, user!.id, totalAmount);
 
       // Show success message and offline payment instructions

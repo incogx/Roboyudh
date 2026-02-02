@@ -27,9 +27,12 @@ CREATE TABLE IF NOT EXISTS events (
   name TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'tech' CHECK (category IN ('tech', 'non-tech')),
   description TEXT DEFAULT '',
+  rules TEXT[] DEFAULT '{}',
   event_date DATE,
   max_team_size INTEGER DEFAULT 5,
   price_per_head INTEGER DEFAULT 0,
+  image_url TEXT,
+  rulebook_url TEXT,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -201,16 +204,145 @@ CREATE POLICY "tickets_insert_admin" ON tickets FOR INSERT
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 -- ============================================================
--- SEED DATA (5 Events)
+-- SEED DATA (6 Events - Correct Pricing & Team Sizes)
 -- ============================================================
-INSERT INTO events (id, name, category, description, event_date, max_team_size, price_per_head, is_active)
+-- PRICING RULES:
+-- - All technical events: ₹200 per head, 2-5 members per team
+-- - GameVerse: ₹200 per head, 2 members per team (exactly 2)
+-- ============================================================
+INSERT INTO events (id, name, category, description, rules, event_date, max_team_size, price_per_head, image_url, rulebook_url, is_active)
 VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'Line Follower', 'tech', 'Autonomous robot follows a line', '2026-02-26', 4, 500, TRUE),
-  ('550e8400-e29b-41d4-a716-446655440002', 'RC Racing', 'tech', 'Remote control car racing competition', '2026-02-26', 2, 300, TRUE),
-  ('550e8400-e29b-41d4-a716-446655440003', 'RoboSumo', 'tech', 'Sumo wrestling robots battle', '2026-02-27', 3, 400, TRUE),
-  ('550e8400-e29b-41d4-a716-446655440004', 'RoboSoccer', 'tech', 'Soccer-playing robots competition', '2026-02-27', 5, 600, TRUE),
-  ('550e8400-e29b-41d4-a716-446655440005', 'GameVerse', 'tech', 'Gaming tournament', '2026-02-26', 1, 200, TRUE)
-ON CONFLICT DO NOTHING;
+  (
+    '550e8400-e29b-41d4-a716-446655440001', 
+    'Line Follower', 
+    'tech', 
+    'Autonomous robot follows a line course with maximum speed and accuracy. The ultimate test of sensor calibration and programming.',
+    ARRAY[
+      'Minimum 2 members, Maximum 5 members per team',
+      'Autonomous navigation only - no manual control',
+      'Fastest completion wins',
+      'Robot must stay on the line throughout',
+      'Penalties for leaving track or stopping',
+      'Price: ₹200 per head'
+    ],
+    '2026-02-26', 
+    5, 
+    200, 
+    '/images/line_follower.png',
+    '/rulebooks/line_follower.pdf',
+    TRUE
+  ),
+  (
+    '550e8400-e29b-41d4-a716-446655440002', 
+    'RC Racing', 
+    'tech', 
+    'Race your RC car through challenging tracks with speed and precision. Test your engineering and driving skills in this high-speed competition.',
+    ARRAY[
+      'Minimum 2 members, Maximum 5 members per team',
+      'RC car must be self-built or modified',
+      'Time-based scoring system',
+      'Multiple heats with best time counting',
+      'Safety gear mandatory for participants',
+      'Price: ₹200 per head'
+    ],
+    '2026-02-27', 
+    5, 
+    200, 
+    '/images/robo_racing.png',
+    '/rulebooks/rc_racing.pdf',
+    TRUE
+  ),
+  (
+    '550e8400-e29b-41d4-a716-446655440003', 
+    'RoboSumo', 
+    'tech', 
+    'Battle robots in a sumo ring. Push your opponent out to win! Pure robot combat with strategy and power.',
+    ARRAY[
+      'Minimum 2 members, Maximum 5 members per team',
+      'Weight limit: 3kg maximum',
+      'Size limit: 20cm x 20cm base',
+      'Knockout style elimination tournament',
+      'No projectiles or liquid weapons allowed',
+      'Price: ₹200 per head'
+    ],
+    '2026-02-27', 
+    5, 
+    200, 
+    '/images/robo_sumo.png',
+    '/rulebooks/robo_sumo.pdf',
+    TRUE
+  ),
+  (
+    '550e8400-e29b-41d4-a716-446655440004', 
+    'RoboSoccer', 
+    'tech', 
+    'Build robots that can play soccer autonomously or with manual control. Strategy meets engineering in this team competition.',
+    ARRAY[
+      'Minimum 2 members, Maximum 5 members per team',
+      'Robots must fit size specifications (30cm x 30cm x 30cm)',
+      'Match duration: 10 minutes per half',
+      'Manual or autonomous control allowed',
+      'Ball detection and kicking mechanisms required',
+      'Price: ₹200 per head'
+    ],
+    '2026-02-27', 
+    5, 
+    200, 
+    '/images/RoboSoccer.png',
+    '/rulebooks/robo_soccer.pdf',
+    TRUE
+  ),
+  (
+    '550e8400-e29b-41d4-a716-446655440005', 
+    'GameVerse', 
+    'non-tech', 
+    'Compete in multiple gaming categories for the ultimate gaming championship. From strategy to action, test your gaming prowess across various titles.',
+    ARRAY[
+      'Exactly 2 members per team (Minimum 2, Maximum 2)',
+      'Multiple game categories (PUBG Mobile, COD Mobile, Free Fire, Valorant)',
+      'Fair play and sportsmanship required',
+      'No cheating or external tools allowed',
+      'Tournament bracket format',
+      'Price: ₹100 per head'
+    ],
+    '2026-02-26', 
+    2, 
+    100, 
+    '/images/Game_verse.png',
+    '/rulebooks/game_verse.pdf',
+    TRUE
+  ),
+  (
+    '550e8400-e29b-41d4-a716-446655440006', 
+    'Obstacle Run', 
+    'tech', 
+    'Navigate your robot through complex obstacles and challenging terrain. Test your robot''s mobility and control systems.',
+    ARRAY[
+      'Minimum 2 members, Maximum 5 members per team',
+      'Manual or autonomous control allowed',
+      'Points for each obstacle cleared',
+      'Time bonus for faster completion',
+      'Multiple obstacle types including ramps, barriers, and narrow passages',
+      'Price: ₹200 per head'
+    ],
+    '2026-02-27', 
+    5, 
+    200, 
+    '/images/obstacle_run.png',
+    '/rulebooks/obstacle_run.pdf',
+    TRUE
+  )
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  category = EXCLUDED.category,
+  description = EXCLUDED.description,
+  rules = EXCLUDED.rules,
+  event_date = EXCLUDED.event_date,
+  max_team_size = EXCLUDED.max_team_size,
+  price_per_head = EXCLUDED.price_per_head,
+  image_url = EXCLUDED.image_url,
+  rulebook_url = EXCLUDED.rulebook_url,
+  is_active = EXCLUDED.is_active;
 
 -- ============================================================
 -- END
