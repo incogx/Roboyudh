@@ -160,7 +160,11 @@ CREATE TRIGGER trg_payment_validation BEFORE UPDATE OF status ON payments
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "payments_select_own" ON payments;
 CREATE POLICY "payments_select_own" ON payments FOR SELECT 
-  USING (user_id = auth.uid() OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
+  USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "payments_select_admin" ON payments;
+CREATE POLICY "payments_select_admin" ON payments FOR SELECT 
+  USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 DROP POLICY IF EXISTS "payments_insert_own" ON payments;
 CREATE POLICY "payments_insert_own" ON payments FOR INSERT WITH CHECK (user_id = auth.uid());
