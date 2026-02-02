@@ -3,17 +3,22 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Max-Age": "86400",
 };
 
 serve(async (req) => {
+  console.log('📦 Create-Ticket Request received:', req.method, req.url);
+  
   // Handle CORS
   if (req.method === "OPTIONS") {
+    console.log('✅ CORS preflight');
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    console.log('🔄 Parsing request body...');
     const {
       teamId,
       eventId,
@@ -22,8 +27,17 @@ serve(async (req) => {
       ticketCode,
     } = await req.json();
 
+    console.log('✅ Request parsed:', {
+      teamId,
+      eventId,
+      userId,
+      paymentId,
+      ticketCode,
+    });
+
     // Validate inputs
     if (!teamId || !eventId || !userId || !paymentId || !ticketCode) {
+      console.error('❌ Missing required fields');
       return new Response(
         JSON.stringify({
           error: "Missing required fields",
@@ -38,22 +52,18 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
+      console.error('❌ Missing Supabase configuration');
       return new Response(
         JSON.stringify({ error: "Missing Supabase configuration" }),
         { status: 500, headers: corsHeaders }
       );
     }
 
+    console.log('✅ Supabase configured');
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     // Insert ticket using service role (bypasses RLS)
-    console.log("Inserting ticket:", {
-      teamId,
-      eventId,
-      userId,
-      paymentId,
-      ticketCode,
-    });
+    console.log("📦 Inserting ticket...");
 
     const { data, error } = await supabase
       .from("tickets")
@@ -70,7 +80,7 @@ serve(async (req) => {
       .single();
 
     if (error) {
-      console.error("Ticket creation error:", error);
+      console.error('❌ Ticket creation error:', error);
       return new Response(
         JSON.stringify({
           error: "Failed to create ticket",
@@ -81,14 +91,14 @@ serve(async (req) => {
       );
     }
 
-    console.log("Ticket created successfully:", data);
+    console.log('✅ Ticket created successfully!', data);
 
     return new Response(JSON.stringify({ success: true, ticket: data }), {
       status: 200,
       headers: corsHeaders,
     });
   } catch (error) {
-    console.error("Function error:", error);
+    console.error('❌ Function error:', error);
     return new Response(
       JSON.stringify({
         error: "Internal server error",
@@ -97,4 +107,6 @@ serve(async (req) => {
       { status: 500, headers: corsHeaders }
     );
   }
+}, {
+  http: 'cors',
 });
