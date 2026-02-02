@@ -145,7 +145,7 @@ This is by design. All payment is offline, admin approval only. No payment uploa
 
 👤 Admin Account
 
-Admin Email: abdulsist23@gmail.com
+Admin Email: organizers.roboyudh@gmail.com
 
 Admin rights are strictly enforced via database policies.
 

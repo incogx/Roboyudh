@@ -54,11 +54,10 @@ export async function deleteTeamAndRelatedData(teamId: string): Promise<void> {
  * All functions automatically use the authenticated user's context
  * RLS policies enforce that users can only access their own data
  * 
- * PAYMENT FLOW: PENDING → WAITING → APPROVED/REJECTED
- * - PENDING: User registered, no proof uploaded
- * - WAITING: User uploaded proof, waiting admin review
- * - APPROVED: Admin approved, ticket generated
- * - REJECTED: Admin rejected (final)
+ * PAYMENT FLOW: PENDING → APPROVED/REJECTED (Offline Payment Only)
+ * - PENDING: User registered, payment to be collected offline by admin
+ * - APPROVED: Admin approved after collecting payment, ticket generated
+ * - REJECTED: Admin rejected (with reason)
  */
 
 import { supabase } from './supabase';
@@ -105,8 +104,8 @@ export interface TeamMember {
   created_at: string;
 }
 
-// Payment status flow: PENDING → WAITING → APPROVED/REJECTED
-export type PaymentStatus = 'PENDING' | 'WAITING' | 'APPROVED' | 'REJECTED';
+// Payment status flow: PENDING → APPROVED/REJECTED (Offline only)
+export type PaymentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface Payment {
   id: string;
@@ -118,6 +117,7 @@ export interface Payment {
   screenshot_url: string | null;
   status: PaymentStatus;
   admin_comment: string | null;
+  rejection_reason: string | null;
   admin_decision_at: string | null;
   created_at: string;
   updated_at: string;
@@ -530,8 +530,8 @@ export async function fetchPaymentById(paymentId: string): Promise<Payment | nul
 }
 
 /**
- * Create payment record (status: WAITING)
- * Called after team creation - user pays externally, waits for admin verification
+ * Create payment record (status: PENDING)
+ * Called after team creation - payment to be collected offline by admin
  */
 export async function createPayment(
   teamId: string,
@@ -556,39 +556,42 @@ export async function createPayment(
 }
 
 /**
- * Submit payment proof (PENDING → WAITING)
- * User uploads screenshot and transaction ID
+ * @deprecated This function is no longer used in the offline payment flow.
+ * Submit payment proof (PENDING → WAITING) - DEPRECATED
+ * Keep for backward compatibility only
  */
 export async function submitPaymentProof(
   paymentId: string,
   transactionId: string,
   screenshotUrl: string
 ): Promise<Payment> {
+  // This function is deprecated and should not be used
+  // Kept for backward compatibility with existing code
   const { data, error } = await supabase
     .from('payments')
     .update({ 
       transaction_id: transactionId,
-      screenshot_url: screenshotUrl,
-      status: 'WAITING'
+      screenshot_url: screenshotUrl
     })
     .eq('id', paymentId)
-    .eq('status', 'PENDING')  // Can only submit if currently PENDING
+    .eq('status', 'PENDING')
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to submit payment proof: ${error.message}`);
+  if (error) throw new Error(`Failed to update payment: ${error.message}`);
   return data;
 }
 
 /**
- * Approve payment (WAITING → APPROVED) - Admin only
+ * Approve payment (PENDING → APPROVED) - Admin only
+ * Called after admin collects payment offline
  */
 export async function approvePayment(paymentId: string, adminComment?: string): Promise<Payment> {
   const { data, error } = await supabase
     .from('payments')
     .update({ 
       status: 'APPROVED',
-      admin_comment: adminComment || 'Payment verified and approved'
+      admin_comment: adminComment || 'Payment collected and approved'
     })
     .eq('id', paymentId)
     .select()
@@ -599,14 +602,16 @@ export async function approvePayment(paymentId: string, adminComment?: string): 
 }
 
 /**
- * Reject payment (WAITING → REJECTED) - Admin only
+ * Reject payment (PENDING → REJECTED) - Admin only
+ * Rejection reason is shown to the user
  */
-export async function rejectPayment(paymentId: string, adminComment: string): Promise<Payment> {
+export async function rejectPayment(paymentId: string, rejectionReason: string, adminComment?: string): Promise<Payment> {
   const { data, error } = await supabase
     .from('payments')
     .update({ 
       status: 'REJECTED',
-      admin_comment: adminComment
+      rejection_reason: rejectionReason,
+      admin_comment: adminComment || rejectionReason
     })
     .eq('id', paymentId)
     .select()
@@ -645,6 +650,7 @@ export async function fetchPaymentsByStatus(status: PaymentStatus): Promise<Paym
 
 /**
  * Fetch pending payments with team details (admin dashboard)
+ * Shows payments awaiting offline collection
  */
 export async function fetchPendingPaymentsWithDetails(): Promise<any[]> {
   const { data, error } = await supabase
@@ -661,7 +667,7 @@ export async function fetchPendingPaymentsWithDetails(): Promise<any[]> {
         name
       )
     `)
-    .eq('status', 'WAITING')
+    .eq('status', 'PENDING')
     .order('created_at', { ascending: true });
 
   if (error) throw new Error(`Failed to fetch pending payments: ${error.message}`);
@@ -713,7 +719,7 @@ export async function createTicket(
   eventId: string,
   userId: string,
   paymentId: string,
-  qrCodeData?: string,
+  ticketCode: string,
   pdfUrl?: string
 ): Promise<Ticket> {
   const { data, error } = await supabase
@@ -723,7 +729,8 @@ export async function createTicket(
       event_id: eventId,
       user_id: userId,
       payment_id: paymentId,
-      qr_code_data: qrCodeData || null,
+      ticket_code: ticketCode,
+      qr_code_url: null,
       pdf_url: pdfUrl || null
     }])
     .select()
@@ -952,8 +959,9 @@ export async function createOnSpotRegistration(
 
     if (paymentError) throw new Error(`Failed to create payment: ${paymentError.message}`);
 
-    // Create ticket
-    const ticket = await createTicket(team.id, eventId, user.id, payment.id);
+    // Create ticket with ticket code
+    const ticketCode = `RBY26-${eventId.substring(0, 4).toUpperCase()}-${team.id.substring(0, 8).toUpperCase()}`;
+    const ticket = await createTicket(team.id, eventId, user.id, payment.id, ticketCode);
 
     return { team, members, payment, ticket };
   } catch (error) {
@@ -973,7 +981,6 @@ export async function getRegistrationStats(): Promise<{
   totalParticipants: number;
   approvedPayments: number;
   pendingPayments: number;
-  waitingPayments: number;
   rejectedPayments: number;
   totalRevenue: number;
   pendingRevenue: number;
@@ -987,7 +994,6 @@ export async function getRegistrationStats(): Promise<{
     const totalParticipants = teams.reduce((sum, team) => sum + team.team_size, 0);
     const approvedPayments = payments.filter(p => p.status === 'APPROVED');
     const pendingPayments = payments.filter(p => p.status === 'PENDING');
-    const waitingPayments = payments.filter(p => p.status === 'WAITING');
     const rejectedPayments = payments.filter(p => p.status === 'REJECTED');
 
     return {
@@ -995,10 +1001,9 @@ export async function getRegistrationStats(): Promise<{
       totalParticipants,
       approvedPayments: approvedPayments.length,
       pendingPayments: pendingPayments.length,
-      waitingPayments: waitingPayments.length,
       rejectedPayments: rejectedPayments.length,
       totalRevenue: approvedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
-      pendingRevenue: waitingPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      pendingRevenue: pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0),
     };
   } catch (error) {
     throw new Error(`Failed to fetch stats: ${error instanceof Error ? error.message : 'Unknown error'}`);

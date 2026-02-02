@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 // CRITICAL: Define the ONLY admin email allowed to access admin dashboard
 // This email MUST match the auth.jwt() -> 'email' claim in Supabase RLS policies
-export const ADMIN_EMAIL = 'abdulsist23@gmail.com';
+export const ADMIN_EMAIL = 'organizers.roboyudh@gmail.com';
 
 interface AuthContextType {
   user: User | null;

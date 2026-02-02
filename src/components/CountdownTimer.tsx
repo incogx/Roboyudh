@@ -157,7 +157,7 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate }) => {
       </div>
       {/* Sound and mute button removed */}
       {/* Event Date */}
-      <span className="text-xs text-cyan-300 mt-2">Event Date: 26th February 2026</span>
+      <span className="text-xs text-cyan-300 mt-2">Event Date: 26th February 2026 | Reporting Time: 08:40 AM</span>
       {/* Custom styles for flip, pulse, shake, energy flash, sparks */}
       <style>{`
         .animate-flip {

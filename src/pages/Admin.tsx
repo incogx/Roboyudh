@@ -14,15 +14,14 @@ import {
   approvePayment,
   rejectPayment,
   createTicket,
-  submitPaymentProof,
   Event,
   Team,
   Payment,
   TeamMember,
   RegistrationDetails,
 } from '../lib/db';
-import QRCode from 'qrcode';
 import { supabase } from '../lib/supabase';
+import { sendApprovalEmail, sendRejectionEmail } from '../lib/emailService';
 import {
   LayoutDashboard,
   Users,
@@ -37,8 +36,6 @@ import {
   ChevronDown,
   XCircle,
   Mail,
-  Image,
-  ExternalLink,
   Loader2,
 } from 'lucide-react';
 
@@ -53,39 +50,6 @@ interface DashboardStats {
 }
 
 const Admin = () => {
-    // Handler for cash payments: PENDING -> WAITING -> APPROVED -> Ticket
-    const handleCashPaymentAndGenerateTicket = async (payment: Payment, team: Team, userEmail: string) => {
-      if (!payment || processingPayment) return;
-      setProcessingPayment(payment.id);
-      try {
-        // 1. Move payment to WAITING (simulate proof)
-        await submitPaymentProof(payment.id, 'CASH', '');
-
-        // 2. Approve payment
-        await approvePayment(payment.id, 'Cash payment received and approved by admin');
-
-        // 3. Generate QR code data (teamId, eventId, paymentId)
-        const qrString = JSON.stringify({
-          teamId: payment.team_id,
-          eventId: payment.event_id,
-          paymentId: payment.id,
-          type: 'roboyudh-ticket',
-        });
-        const qrCodeDataUrl = await QRCode.toDataURL(qrString);
-
-        // 4. Create ticket with QR code
-        await createTicket(payment.team_id, payment.event_id, payment.user_id, payment.id, qrCodeDataUrl);
-
-        // 5. Notify admin
-        await loadDashboard();
-        alert('✅ Cash payment marked as received, ticket generated with QR code!');
-      } catch (err) {
-        console.error('Cash payment error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to process cash payment');
-      } finally {
-        setProcessingPayment(null);
-      }
-    };
   const navigate = useNavigate();
   const { user, isAdmin, loading: authLoading } = useAuth();
   
@@ -189,37 +153,42 @@ const Admin = () => {
       // 1. Approve the payment
       await approvePayment(payment.id, 'Payment verified and approved by admin');
       
-      // 2. Create ticket for the team
-      await createTicket(payment.team_id, payment.event_id, payment.user_id, payment.id);
+      // 2. Generate simple ticket code (no QR code needed)
+      const ticketCode = `RBY26-${payment.event_id.substring(0, 4).toUpperCase()}-${payment.team_id.substring(0, 8).toUpperCase()}`;
       
-      // 3. Send email notification (via mailto link or external service)
+      // 3. Create ticket for the team with ticket code
+      await createTicket(payment.team_id, payment.event_id, payment.user_id, payment.id, ticketCode);
+      
+      // 4. Get event details for email
       const event = events.find(e => e.id === payment.event_id);
-      const subject = encodeURIComponent(`✅ ROBOYUDH 2026 - Payment Approved for ${event?.name || 'Event'}`);
-      const body = encodeURIComponent(
-        `Dear ${team.team_name},\n\n` +
-        `Great news! Your payment of ₹${payment.amount} for ${event?.name || 'the event'} has been verified and approved.\n\n` +
-        `🎟️ Your ticket has been generated! You can view and download it from:\n` +
-        `https://roboyudh.sathyabama.in/my-registrations\n\n` +
-        `Event Details:\n` +
-        `- Event: ${event?.name}\n` +
-        `- Team: ${team.team_name}\n` +
-        `- Amount Paid: ₹${payment.amount}\n\n` +
-        `See you at ROBOYUDH 2026! 🤖\n\n` +
-        `Best regards,\n` +
-        `ROBOYUDH Team\n` +
-        `Sathyabama Institute of Science and Technology`
+      
+      // 5. Send approval email via Edge Function
+      const emailResult = await sendApprovalEmail(
+        userEmail,
+        team.team_name,
+        event?.name || 'ROBOYUDH 2026',
+        event?.event_date ? new Date(event.event_date).toLocaleDateString('en-IN', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }) : 'February 26-27, 2026',
+        ticketCode
       );
       
-      // Open mailto link for admin to send email
-      window.open(`mailto:${userEmail}?subject=${subject}&body=${body}`, '_blank');
+      if (!emailResult.success) {
+        console.error('Email sending failed:', emailResult.error);
+        alert(`⚠️ Payment approved and ticket generated, but email failed to send.\n\nTicket Code: ${ticketCode}\n\nPlease manually notify the user at: ${userEmail}\n\nError: ${emailResult.error}`);
+      } else {
+        alert(`✅ Payment approved, ticket generated, and email sent successfully!\n\nTicket Code: ${ticketCode}\n\nNotification sent to: ${userEmail}`);
+      }
       
-      // Reload data
+      // 6. Reload dashboard data
       await loadDashboard();
       
-      alert(`✅ Payment approved and ticket generated!\n\nPlease send the email notification to: ${userEmail}`);
     } catch (err) {
       console.error('Approval error:', err);
       setError(err instanceof Error ? err.message : 'Failed to approve payment');
+      alert(`❌ Error: ${err instanceof Error ? err.message : 'Failed to approve payment'}`);
     } finally {
       setProcessingPayment(null);
     }
@@ -231,31 +200,37 @@ const Admin = () => {
     
     setProcessingPayment(payment.id);
     try {
-      // Reject the payment
-      await rejectPayment(payment.id, rejectReason);
+      // 1. Reject the payment with reason
+      await rejectPayment(payment.id, rejectReason, `Rejected by admin: ${rejectReason}`);
       
-      // Send rejection email
+      // 2. Get event details for email
       const event = events.find(e => e.id === payment.event_id);
-      const subject = encodeURIComponent(`❌ ROBOYUDH 2026 - Payment Rejected for ${event?.name || 'Event'}`);
-      const body = encodeURIComponent(
-        `Dear Participant,\n\n` +
-        `Unfortunately, your payment for ${event?.name || 'the event'} has been rejected.\n\n` +
-        `Reason: ${rejectReason}\n\n` +
-        `If you believe this is an error, please contact us with your transaction details.\n\n` +
-        `Best regards,\n` +
-        `ROBOYUDH Team`
+      const team = teams.find(t => t.id === payment.team_id);
+      
+      // 3. Send rejection email via Edge Function
+      const emailResult = await sendRejectionEmail(
+        userEmail,
+        team?.team_name || 'Team',
+        event?.name || 'ROBOYUDH 2026',
+        rejectReason
       );
       
-      window.open(`mailto:${userEmail}?subject=${subject}&body=${body}`, '_blank');
+      if (!emailResult.success) {
+        console.error('Email sending failed:', emailResult.error);
+        alert(`⚠️ Payment rejected, but email failed to send.\n\nRejection Reason: ${rejectReason}\n\nPlease manually notify the user at: ${userEmail}\n\nError: ${emailResult.error}`);
+      } else {
+        alert(`✅ Payment rejected and notification email sent successfully!\n\nRejection Reason: ${rejectReason}\n\nNotification sent to: ${userEmail}`);
+      }
       
+      // 4. Close modal and reload data
       setShowRejectModal(null);
       setRejectReason('');
       await loadDashboard();
       
-      alert(`❌ Payment rejected.\n\nPlease send the rejection email to: ${userEmail}`);
     } catch (err) {
       console.error('Rejection error:', err);
       setError(err instanceof Error ? err.message : 'Failed to reject payment');
+      alert(`❌ Error: ${err instanceof Error ? err.message : 'Failed to reject payment'}`);
     } finally {
       setProcessingPayment(null);
     }
@@ -741,11 +716,11 @@ const Admin = () => {
                                           <span className="font-medium">Approved</span>
                                         </span>
                                       );
-                                    case 'WAITING':
+                                    case 'PENDING':
                                       return (
                                         <span className="flex items-center gap-2 text-yellow-400">
                                           <Clock className="w-4 h-4" />
-                                          <span className="font-medium">Awaiting</span>
+                                          <span className="font-medium">Pending</span>
                                         </span>
                                       );
                                     case 'REJECTED':
@@ -898,7 +873,7 @@ const Admin = () => {
                                               <span className="text-gray-400">Payment Status:</span>
                                               <span className={
                                                 payment?.status === 'APPROVED' ? 'text-green-400 font-semibold' : 
-                                                payment?.status === 'WAITING' ? 'text-yellow-400 font-semibold' :
+                                                payment?.status === 'PENDING' ? 'text-yellow-400 font-semibold' :
                                                 payment?.status === 'REJECTED' ? 'text-red-400 font-semibold' :
                                                 'text-orange-400 font-semibold'
                                               }>
@@ -923,7 +898,7 @@ const Admin = () => {
                                             </h4>
                                             <div className="flex gap-3 mt-4">
                                               <button
-                                                onClick={() => handleCashPaymentAndGenerateTicket(payment, team, extendedData?.email || '')}
+                                                onClick={() => handleApprovePayment(payment, team, extendedData?.email || '')}
                                                 disabled={processingPayment === payment.id}
                                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 font-semibold hover:bg-green-500/30 transition-all disabled:opacity-50"
                                               >
@@ -932,7 +907,7 @@ const Admin = () => {
                                                 ) : (
                                                   <CheckCircle className="w-4 h-4" />
                                                 )}
-                                                Mark as Received (Cash) & Generate Ticket
+                                                Approve & Generate Ticket
                                               </button>
                                               <button
                                                 onClick={() => setShowRejectModal(payment.id)}
@@ -945,7 +920,7 @@ const Admin = () => {
                                             </div>
                                             <p className="text-gray-500 text-xs mt-3 flex items-center gap-1">
                                               <Mail className="w-3 h-3" />
-                                              Ticket will be available to the team after approval.
+                                              Email notification will be sent to the user after approval.
                                             </p>
                                           </div>
                                         )}

@@ -2,7 +2,7 @@
 -- ROBOYUDH 2026 - COMPLETE DATABASE SETUP
 -- ============================================================
 -- Created: January 18, 2026
--- Admin Email: abdulsist23@gmail.com
+-- Admin Email: organizers.roboyudh@gmail.com
 -- Purpose: Manual Payment Verification System - NO AUTO PAYMENT GATEWAYS
 -- ============================================================
 -- 
@@ -58,13 +58,13 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================================
 -- STEP 3: CREATE ADMIN CHECK FUNCTION
 -- ============================================================
--- Admin email: abdulsist23@gmail.com (ONLY admin)
+-- Admin email: organizers.roboyudh@gmail.com (ONLY admin)
 
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN (
-    SELECT auth.jwt() ->> 'email' = 'abdulsist23@gmail.com'
+    SELECT auth.jwt() ->> 'email' = 'organizers.roboyudh@gmail.com'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -137,12 +137,11 @@ CREATE TABLE registrations (
 );
 
 -- ========== PAYMENTS TABLE ==========
--- Purpose: Manual payment tracking
--- Status Flow: PENDING → WAITING → APPROVED/REJECTED (final)
--- PENDING = User registered, no proof uploaded
--- WAITING = User uploaded proof, waiting admin review
--- APPROVED = Admin approved, ticket generated
--- REJECTED = Admin rejected (final, no re-upload)
+-- Purpose: Offline payment tracking (admin-only approval)
+-- Status Flow: PENDING → APPROVED/REJECTED (final) - NO WAITING STATE
+-- PENDING = User registered, payment to be collected offline
+-- APPROVED = Admin approved after collecting payment, ticket generated
+-- REJECTED = Admin rejected (with reason)
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -151,15 +150,16 @@ CREATE TABLE payments (
   
   -- Payment info
   amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
-  transaction_id VARCHAR(255),
-  screenshot_url TEXT,
+  transaction_id VARCHAR(255),  -- Optional, for reference only
+  screenshot_url TEXT,  -- Deprecated, kept for backward compatibility
   
-  -- Status tracking (manual verification system)
+  -- Status tracking (offline payment flow)
   status VARCHAR(50) DEFAULT 'PENDING' 
-    CHECK (status IN ('PENDING', 'WAITING', 'APPROVED', 'REJECTED')),
+    CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
   
   -- Admin review
   admin_comment TEXT,
+  rejection_reason TEXT,  -- User-facing rejection reason
   admin_decision_at TIMESTAMP WITH TIME ZONE,
   
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -423,7 +423,7 @@ CREATE POLICY "payments_insert_own" ON payments
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
--- Users can update PENDING payments (upload proof) → becomes WAITING
+-- Users can update PENDING payments (contact info only, not status)
 CREATE POLICY "payments_update_own_pending" ON payments
   FOR UPDATE
   USING (
@@ -432,10 +432,10 @@ CREATE POLICY "payments_update_own_pending" ON payments
   )
   WITH CHECK (
     user_id = auth.uid() 
-    AND status IN ('PENDING', 'WAITING')
+    AND status = 'PENDING'
   );
 
--- Admin can update WAITING payments → APPROVED or REJECTED
+-- Admin can update payments (PENDING → APPROVED or REJECTED)
 CREATE POLICY "payments_update_admin" ON payments
   FOR UPDATE
   USING (is_admin())
@@ -645,23 +645,17 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Validate transitions
+  -- Validate transitions - OFFLINE FLOW ONLY: PENDING → APPROVED/REJECTED
   CASE
-    WHEN OLD.status = 'PENDING' AND NEW.status = 'WAITING' THEN
-      -- User submitting payment proof
-      IF NEW.transaction_id IS NULL OR NEW.screenshot_url IS NULL THEN
-        RAISE EXCEPTION 'Transaction ID and screenshot are required to submit payment';
-      END IF;
-      
-    WHEN OLD.status = 'WAITING' AND NEW.status IN ('APPROVED', 'REJECTED') THEN
-      -- Admin making decision
+    WHEN OLD.status = 'PENDING' AND NEW.status IN ('APPROVED', 'REJECTED') THEN
+      -- Admin making decision after collecting offline payment
       NEW.admin_decision_at := NOW();
       
     WHEN OLD.status IN ('APPROVED', 'REJECTED') THEN
       RAISE EXCEPTION 'Payment status % is FINAL and cannot be changed', OLD.status;
       
     ELSE
-      RAISE EXCEPTION 'Invalid status transition from % to %', OLD.status, NEW.status;
+      RAISE EXCEPTION 'Invalid status transition from % to %. Only PENDING → APPROVED/REJECTED allowed.', OLD.status, NEW.status;
   END CASE;
 
   RETURN NEW;
@@ -697,7 +691,7 @@ SELECT
 FROM payments p
 JOIN events e ON e.id = p.event_id
 JOIN teams t ON t.id = p.team_id
-WHERE p.status = 'WAITING'
+WHERE p.status = 'PENDING'
 ORDER BY p.created_at ASC;
 
 
@@ -735,10 +729,10 @@ SELECT
   (SELECT COUNT(*) FROM teams) AS total_teams,
   (SELECT COUNT(DISTINCT user_id) FROM teams) AS total_users,
   (SELECT COUNT(*) FROM payments WHERE status = 'APPROVED') AS approved_payments,
-  (SELECT COUNT(*) FROM payments WHERE status = 'WAITING') AS pending_approvals,
+  (SELECT COUNT(*) FROM payments WHERE status = 'PENDING') AS pending_approvals,
   (SELECT COUNT(*) FROM payments WHERE status = 'REJECTED') AS rejected_payments,
   (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'APPROVED') AS total_revenue,
-  (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'WAITING') AS pending_revenue,
+  (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'PENDING') AS pending_revenue,
   (SELECT COUNT(*) FROM tickets) AS tickets_generated;
 
 
@@ -762,7 +756,7 @@ VALUES
   200,
   5,
   '/images/robo_racing.png',
-  '2026-02-26'
+  '2026-02-27'
 ),
 (
   'Robo Soccer',
@@ -778,7 +772,7 @@ VALUES
   200,
   5,
   '/images/RoboSoccer.png',
-  '2026-02-27'
+  '2026-02-26'
 ),
 (
   'Line Follower',
@@ -837,7 +831,8 @@ VALUES
     'Multiple game categories (PUBG Mobile, COD Mobile, Free Fire, Valorant)',
     'Fair play and sportsmanship required',
     'No cheating or external tools allowed',
-    'Tournament bracket format'
+    'Tournament bracket format',
+    'Event runs on both Feb 26 & 27, 2026'
   ],
   100,
   1,
@@ -927,11 +922,11 @@ BEGIN
   RAISE NOTICE '║                                                          ║';
   RAISE NOTICE '║  SECURITY:                                               ║';
   RAISE NOTICE '║    • RLS enabled on ALL tables                           ║';
-  RAISE NOTICE '║    • Admin email: abdulsist23@gmail.com                  ║';
+  RAISE NOTICE '║    • Admin email: organizers.roboyudh@gmail.com          ║';
   RAISE NOTICE '║    • Users can only access their own data                ║';
   RAISE NOTICE '║                                                          ║';
   RAISE NOTICE '║  PAYMENT FLOW:                                           ║';
-  RAISE NOTICE '║    PENDING → WAITING → APPROVED/REJECTED                 ║';
+  RAISE NOTICE '║    PENDING → APPROVED/REJECTED (Offline Payment)        ║';
   RAISE NOTICE '║    • No auto-payment gateways                            ║';
   RAISE NOTICE '║    • Admin manually verifies all payments                ║';
   RAISE NOTICE '║    • Tickets generated ONLY after approval               ║';

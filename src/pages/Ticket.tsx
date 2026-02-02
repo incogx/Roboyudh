@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchTicket, fetchPayment, fetchUserTeams } from '../lib/db';
-import { CheckCircle, Download, Calendar, Users, IndianRupee, QrCode } from 'lucide-react';
+import { CheckCircle, Download, Calendar, Users, IndianRupee } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -253,10 +253,13 @@ const Ticket = () => {
               </div>
             </div>
 
-            {/* QR Code Section */}
-            <div className="mb-8 p-6 bg-white rounded-lg text-center">
-              <QrCode className="w-40 h-40 text-black mx-auto" />
-              <p className="text-gray-600 text-sm mt-2">Scan this code for verification</p>
+            {/* Ticket Code Section */}
+            <div className="mb-8 p-8 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-lg text-center border-2 border-cyan-500/30">
+              <p className="text-cyan-400 text-sm font-semibold mb-3">YOUR TICKET CODE</p>
+              <p className="text-5xl md:text-6xl font-mono font-bold bg-gradient-to-r from-cyan-400 to-blue-400 text-transparent bg-clip-text tracking-wider">
+                {ticketData.ticketCode}
+              </p>
+              <p className="text-gray-400 text-sm mt-3">Present this code for verification</p>
             </div>
 
             {/* Member Names */}
@@ -311,7 +314,9 @@ const Ticket = () => {
             <li>• Keep this ticket code safe for check-in during the event</li>
             <li>• Ensure all team members are registered before the event</li>
             <li>• Contact organizers if payment status is not updated within 24 hours</li>
-            <li>• Event starts on February 26, 2026 at SIST Campus, Chennai</li>
+            <li>• Venue: Sathyabama Institute of Science and Technology, Chennai</li>
+            <li>• Reporting Time: 08:40 AM on event day (check your event date)</li>
+            <li>• Event Date: February 26-27, 2026 (varies by event)</li>
           </ul>
         </div>
       </div>

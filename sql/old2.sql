@@ -12,11 +12,11 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Function: is_admin(user_email TEXT)
 -- Purpose: Email-based admin check ONLY (Rule 3: "Admin check: email-based only")
 -- Input: Email string
--- Returns: TRUE only if email = 'abdulsist23@gmail.com'
+-- Returns: TRUE only if email = 'organizers.roboyudh@gmail.com'
 CREATE OR REPLACE FUNCTION is_admin(user_email TEXT)
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN user_email = 'abdulsist23@gmail.com';
+  RETURN user_email = 'organizers.roboyudh@gmail.com';
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -106,10 +106,10 @@ CREATE INDEX idx_registrations_team_id ON registrations(team_id);
 
 
 -- Table: payments
--- Rule 7: "Status: PENDING → WAITING → APPROVED/REJECTED (final)"
+-- Rule 7 (UPDATED): "Status: PENDING → APPROVED/REJECTED (final)" - NO WAITING STATE
 -- Rule 8: "ONE mechanism for status validation (prefer trigger, not CHECK duplication)"
 -- Constraint: UNIQUE(team_id) - ONE payment per team
--- Status values: PENDING | WAITING | APPROVED | REJECTED
+-- Status values: PENDING | APPROVED | REJECTED (WAITING removed for offline payment flow)
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -118,17 +118,18 @@ CREATE TABLE IF NOT EXISTS payments (
   
   -- Payment details
   amount DECIMAL(10, 2) NOT NULL,
-  transaction_id VARCHAR(255),
-  screenshot_file_path VARCHAR(500),
+  transaction_id VARCHAR(255),  -- Optional, for reference only
+  screenshot_file_path VARCHAR(500),  -- Deprecated, kept for backward compatibility
   
   -- Status with CHECK constraint for valid values only
   -- Transition rules enforced by trigger (single mechanism - Rule 8)
   status VARCHAR(50) DEFAULT 'PENDING' 
-    CHECK (status IN ('PENDING', 'WAITING', 'APPROVED', 'REJECTED')),
+    CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
   
   -- Admin decision
   admin_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   admin_comment TEXT,
+  rejection_reason TEXT,  -- Specific reason for rejection (user-facing)
   admin_decision_at TIMESTAMP WITH TIME ZONE,
   
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -213,13 +214,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Validate transition rules: PENDING → WAITING → (APPROVED or REJECTED)
+  -- Validate transition rules: PENDING → (APPROVED or REJECTED) - OFFLINE FLOW ONLY
   CASE
-    WHEN OLD.status = 'PENDING' AND NEW.status != 'WAITING' THEN
-      RAISE EXCEPTION 'Payment can only transition from PENDING to WAITING, not to %', NEW.status;
-    
-    WHEN OLD.status = 'WAITING' AND NEW.status NOT IN ('APPROVED', 'REJECTED') THEN
-      RAISE EXCEPTION 'Payment can only transition from WAITING to APPROVED or REJECTED, not to %', NEW.status;
+    WHEN OLD.status = 'PENDING' AND NEW.status NOT IN ('APPROVED', 'REJECTED') THEN
+      RAISE EXCEPTION 'Payment can only transition from PENDING to APPROVED or REJECTED, not to %', NEW.status;
     
     WHEN OLD.status IN ('APPROVED', 'REJECTED') THEN
       RAISE EXCEPTION 'Payment status % is LOCKED (final state) and cannot be changed', OLD.status;
@@ -387,21 +385,21 @@ CREATE POLICY "payments_insert_own" ON payments
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
--- Users can update their OWN payments when status = PENDING (submit proof)
--- Can transition from PENDING to WAITING
+-- Users can update their OWN payments when status = PENDING (e.g., update contact info)
+-- Cannot change status themselves
 DROP POLICY IF EXISTS "payments_update_own_pending" ON payments;
 CREATE POLICY "payments_update_own_pending" ON payments
   FOR UPDATE
   USING (user_id = auth.uid() AND status = 'PENDING')
-  WITH CHECK (user_id = auth.uid() AND status IN ('PENDING', 'WAITING'));
+  WITH CHECK (user_id = auth.uid() AND status = 'PENDING');
 
 -- Only admins can change payment status (approve/reject)
--- Admins can update payments from WAITING to APPROVED/REJECTED
+-- Admins can update payments from PENDING to APPROVED/REJECTED directly (offline flow)
 DROP POLICY IF EXISTS "payments_update_admin_only" ON payments;
 CREATE POLICY "payments_update_admin_only" ON payments
   FOR UPDATE
-  USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')) AND status = 'WAITING')
-  WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')) AND status IN ('APPROVED', 'REJECTED'));
+  USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')))
+  WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')) AND status IN ('PENDING', 'APPROVED', 'REJECTED'));
 
 
 -- ====== TICKETS POLICIES ======
@@ -445,7 +443,7 @@ CREATE POLICY "audit_log_insert_system" ON audit_log
 -- G. VIEWS (Optional, safe)
 -- ============================================================
 
--- View: Pending payments awaiting admin approval
+-- View: Pending payments awaiting admin approval (offline payments)
 CREATE OR REPLACE VIEW pending_payments AS
 SELECT 
   p.id,
@@ -463,7 +461,7 @@ FROM payments p
 JOIN events e ON e.id = p.event_id
 JOIN teams t ON t.id = p.team_id
 JOIN auth.users u ON u.id = p.user_id
-WHERE p.status = 'WAITING'
+WHERE p.status = 'PENDING'
 ORDER BY p.created_at ASC;
 
 
@@ -496,7 +494,7 @@ ORDER BY r.created_at DESC;
 -- SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp', 'pgcrypto');
 
 -- Test 2: Verify is_admin function exists and works
--- SELECT is_admin('abdulsist23@gmail.com') AS should_be_true;
+-- SELECT is_admin('organizers.roboyudh@gmail.com') AS should_be_true;
 -- SELECT is_admin('other@example.com') AS should_be_false;
 
 -- Test 3: Verify all required tables exist

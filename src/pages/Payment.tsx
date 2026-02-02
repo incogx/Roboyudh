@@ -11,6 +11,7 @@ interface PaymentData {
   user_id: string;
   amount: number;
   status: string;
+  rejection_reason: string | null;
   created_at: string;
 }
 
@@ -131,20 +132,72 @@ const Payment: React.FC = () => {
     return null;
   }
 
+  // Check payment status
+  const isApproved = payment.status === 'APPROVED';
+  const isRejected = payment.status === 'REJECTED';
+  const isPending = payment.status === 'PENDING';
+
   return (
     <div className="min-h-screen bg-black pt-24 pb-16 px-4 flex items-center justify-center">
-      <div className="relative max-w-md w-full bg-gradient-to-br from-gray-900 to-gray-800 border border-green-500/30 rounded-xl p-8 text-center">
-        <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <CheckCircle2 className="w-12 h-12 text-green-400" />
+      <div className={`relative max-w-md w-full bg-gradient-to-br from-gray-900 to-gray-800 border rounded-xl p-8 text-center ${
+        isApproved ? 'border-green-500/30' : isRejected ? 'border-red-500/30' : 'border-cyan-500/30'
+      }`}>
+        <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
+          isApproved ? 'bg-green-500/20' : isRejected ? 'bg-red-500/20' : 'bg-cyan-500/20'
+        }`}>
+          {isApproved ? (
+            <CheckCircle2 className="w-12 h-12 text-green-400" />
+          ) : isRejected ? (
+            <AlertCircle className="w-12 h-12 text-red-400" />
+          ) : (
+            <CheckCircle2 className="w-12 h-12 text-cyan-400" />
+          )}
         </div>
-        <h2 className="text-3xl font-bold text-green-400 mb-4">Registration Submitted!</h2>
-        <p className="text-gray-300 mb-2">Your registration details have been submitted.</p>
-        <p className="text-gray-400 text-sm mb-8">
-          Please wait for confirmation. <span className="font-semibold text-cyan-400">Payment will be collected on spot.</span> You will be notified once your registration is confirmed.
-        </p>
+        
+        {isApproved && (
+          <>
+            <h2 className="text-3xl font-bold text-green-400 mb-4">Payment Approved!</h2>
+            <p className="text-gray-300 mb-2">Your registration has been confirmed.</p>
+            <p className="text-gray-400 text-sm mb-8">
+              Your ticket has been generated. Check your email or view it in My Registrations.
+            </p>
+          </>
+        )}
+        
+        {isRejected && (
+          <>
+            <h2 className="text-3xl font-bold text-red-400 mb-4">Registration Rejected</h2>
+            <p className="text-gray-300 mb-2">Unfortunately, your registration was not approved.</p>
+            {payment.rejection_reason && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+                <p className="text-red-300 font-semibold mb-1">Reason:</p>
+                <p className="text-gray-300 text-sm">{payment.rejection_reason}</p>
+              </div>
+            )}
+            <p className="text-gray-400 text-sm mb-8">
+              For more information, please contact the event organizers.
+            </p>
+          </>
+        )}
+        
+        {isPending && (
+          <>
+            <h2 className="text-3xl font-bold text-cyan-400 mb-4">Registration Submitted!</h2>
+            <p className="text-gray-300 mb-2">Your registration details have been submitted.</p>
+            <p className="text-gray-400 text-sm mb-8">
+              <span className="font-semibold text-cyan-400">Payment will be collected at the event desk on the event day.</span>
+              <br/>You will receive a confirmation email once the admin approves your registration after payment collection.
+            </p>
+          </>
+        )}
+        
         <button
           onClick={() => navigate('/')}
-          className="w-full py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-lg transition-all"
+          className={`w-full py-3 text-white font-bold rounded-lg transition-all ${
+            isApproved ? 'bg-green-500 hover:bg-green-600' : 
+            isRejected ? 'bg-red-500 hover:bg-red-600' : 
+            'bg-cyan-500 hover:bg-cyan-600'
+          }`}
         >
           Back to Home
         </button>

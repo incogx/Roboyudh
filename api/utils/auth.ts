@@ -5,5 +5,5 @@ export function getUserFromRequest(req) {
 }
 
 export function requireAdmin(user) {
-  return user && user.email === 'abdulsist23@gmail.com';
+  return user && user.email === 'organizers.roboyudh@gmail.com';
 }
