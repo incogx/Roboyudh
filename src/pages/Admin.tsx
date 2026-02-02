@@ -685,6 +685,9 @@ const Admin = () => {
                       {getFilteredTeams().map((team) => {
                         const payment = payments.find(p => p.team_id === team.id);
                         const event = events.find(e => e.id === team.event_id);
+                        const computedAmount = payment?.amount && payment.amount > 0
+                          ? payment.amount
+                          : (team.team_size || 0) * (event?.price_per_head || 0);
                         const isExpanded = expandedTeam === team.id;
 
                         return (
@@ -703,7 +706,7 @@ const Admin = () => {
                                 <span className="text-white font-medium">{team.team_size}</span>
                               </td>
                               <td className="py-4 px-6">
-                                <span className="text-cyan-400 font-semibold text-base">₹{payment?.amount || 0}</span>
+                                <span className="text-cyan-400 font-semibold text-base">₹{computedAmount}</span>
                               </td>
                               <td className="py-4 px-6">
                                 {(() => {
@@ -758,6 +761,9 @@ const Admin = () => {
                                   {(() => {
                                     const members = teamMembers[team.id] || [];
                                     const extendedData = teamDetails[team.id];
+                                    const computedAmount = payment?.amount && payment.amount > 0
+                                      ? payment.amount
+                                      : (team.team_size || members.length || 0) * (event?.price_per_head || 0);
                                     
                                     return (
                                       <div className="grid md:grid-cols-3 gap-6">
@@ -770,11 +776,35 @@ const Admin = () => {
                                           <div className="space-y-2">
                                             {members.length > 0 ? (
                                               members.map((member, idx) => (
-                                                <div key={member.id} className="flex items-center gap-2 text-sm">
-                                                  <div className="w-6 h-6 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400 text-xs font-bold">
-                                                    {idx + 1}
+                                                <div key={member.id} className="rounded-lg border border-gray-700/60 bg-black/30 p-3">
+                                                  <div className="flex items-center gap-2 text-sm">
+                                                    <div className="w-6 h-6 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400 text-xs font-bold">
+                                                      {idx + 1}
+                                                    </div>
+                                                    <span className="text-gray-200 font-semibold">{member.member_name}</span>
                                                   </div>
-                                                  <span className="text-gray-300">{member.member_name}</span>
+                                                  <div className="mt-2 text-xs text-gray-400 space-y-1">
+                                                    <div className="flex justify-between gap-2">
+                                                      <span>Email:</span>
+                                                      <span className="text-gray-300 break-all">{member.member_email}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-2">
+                                                      <span>Phone:</span>
+                                                      <span className="text-gray-300">{member.member_phone}</span>
+                                                    </div>
+                                                    {member.department && (
+                                                      <div className="flex justify-between gap-2">
+                                                        <span>Department:</span>
+                                                        <span className="text-gray-300">{member.department}</span>
+                                                      </div>
+                                                    )}
+                                                    {member.year_of_study && (
+                                                      <div className="flex justify-between gap-2">
+                                                        <span>Year:</span>
+                                                        <span className="text-gray-300">{member.year_of_study}</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
                                                 </div>
                                               ))
                                             ) : (
@@ -852,7 +882,23 @@ const Admin = () => {
                                                 )}
                                                 <div className="h-px bg-gray-700 my-3"></div>
                                               </>
-                                            )}
+                                            ) : members[0] ? (
+                                              <>
+                                                <div className="flex justify-between">
+                                                  <span className="text-gray-400">Team Leader:</span>
+                                                  <span className="text-white font-medium">{members[0].member_name}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                  <span className="text-gray-400">Leader Email:</span>
+                                                  <span className="text-white text-xs break-all">{members[0].member_email}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                  <span className="text-gray-400">Leader Phone:</span>
+                                                  <span className="text-white">{members[0].member_phone}</span>
+                                                </div>
+                                                <div className="h-px bg-gray-700 my-3"></div>
+                                              </>
+                                            ) : null}
                                             <div className="flex justify-between">
                                               <span className="text-gray-400">Registered On:</span>
                                               <span className="text-white">{new Date(team.created_at).toLocaleDateString('en-IN')}</span>
@@ -867,7 +913,7 @@ const Admin = () => {
                                             </div>
                                             <div className="flex justify-between">
                                               <span className="text-gray-400">Payment Amount:</span>
-                                              <span className="text-cyan-400 font-bold">₹{payment?.amount || 0}</span>
+                                              <span className="text-cyan-400 font-bold">₹{computedAmount}</span>
                                             </div>
                                             <div className="flex justify-between">
                                               <span className="text-gray-400">Payment Status:</span>

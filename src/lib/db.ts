@@ -99,8 +99,14 @@ export interface TeamMember {
   id: string;
   team_id: string;
   member_name: string;
-  member_email: string | null;
-  member_phone: string | null;
+  member_email: string;
+  member_phone: string;
+  gender: string | null;
+  department: string | null;
+  year_of_study: string | null;
+  college: string | null;
+  city: string | null;
+  state: string | null;
   created_at: string;
 }
 
@@ -354,12 +360,32 @@ export async function addTeamMember(
 }
 
 /**
- * Add multiple members to team
+ * Add multiple members to team with full details
  */
-export async function addTeamMembers(teamId: string, memberNames: string[]): Promise<TeamMember[]> {
-  const members = memberNames.map(name => ({ 
-    team_id: teamId, 
-    member_name: name 
+export interface TeamMemberInput {
+  member_name: string;
+  member_email: string;
+  member_phone: string;
+  gender?: string;
+  department?: string;
+  year_of_study?: string;
+  college?: string;
+  city?: string;
+  state?: string;
+}
+
+export async function addTeamMembers(teamId: string, memberDetails: TeamMemberInput[]): Promise<TeamMember[]> {
+  const members = memberDetails.map(detail => ({ 
+    team_id: teamId,
+    member_name: detail.member_name,
+    member_email: detail.member_email,
+    member_phone: detail.member_phone,
+    gender: detail.gender || null,
+    department: detail.department || null,
+    year_of_study: detail.year_of_study || null,
+    college: detail.college || null,
+    city: detail.city || null,
+    state: detail.state || null
   }));
   
   const { data, error } = await supabase

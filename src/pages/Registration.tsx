@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Copy, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
   createTeam, 
@@ -33,6 +33,34 @@ interface FormData {
   agreeRules: boolean;
 }
 
+const STORAGE_KEY = 'roboyudh_registration_draft';
+
+const saveFormToLocalStorage = (data: FormData) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Could not save to localStorage', e);
+  }
+};
+
+const loadFormFromLocalStorage = (): FormData | null => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    console.warn('Could not load from localStorage', e);
+    return null;
+  }
+};
+
+const clearFormFromLocalStorage = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.warn('Could not clear localStorage', e);
+  }
+};
+
 const Registration = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +82,7 @@ const Registration = () => {
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedMember, setExpandedMember] = useState<number | null>(0);
+  const [hasSavedData, setHasSavedData] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -61,6 +90,20 @@ const Registration = () => {
       return;
     }
   }, [user, authLoading, navigate]);
+
+  // Check if there's saved data on component mount
+  useEffect(() => {
+    const savedData = loadFormFromLocalStorage();
+    setHasSavedData(!!savedData);
+  }, []);
+
+  // Auto-save form data to localStorage whenever it changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveFormToLocalStorage(formData);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData]);
 
   useEffect(() => {
     loadEvents();
@@ -71,20 +114,44 @@ const Registration = () => {
       const event = events.find(e => e.id === selectedEventId);
       if (event) {
         setSelectedEvent(event);
-        // Initialize team members based on event type
-        const maxMembers = event.name === 'GameVerse' ? 2 : event.max_team_size;
-        const initialMembers = Array(maxMembers).fill(null).map(() => ({
-          full_name: '',
-          email: '',
-          phone: '',
-          gender: '',
-          department: '',
-          year_of_study: '',
-          college: '',
-          city: '',
-          state: '',
-        }));
-        setFormData(prev => ({ ...prev, teamMembers: initialMembers }));
+        // Check if we should load saved data or initialize fresh
+        const savedData = loadFormFromLocalStorage();
+        if (savedData && savedData.teamMembers.length > 0) {
+          // Adjust saved data to match the selected event's max team size
+          const maxMembers = event.name === 'GameVerse' ? 2 : event.max_team_size;
+          if (savedData.teamMembers.length !== maxMembers) {
+            // Re-initialize if member count doesn't match event requirements
+            const initialMembers = Array(maxMembers).fill(null).map(() => ({
+              full_name: '',
+              email: '',
+              phone: '',
+              gender: '',
+              department: '',
+              year_of_study: '',
+              college: '',
+              city: '',
+              state: '',
+            }));
+            setFormData(prev => ({ ...prev, teamMembers: initialMembers }));
+          } else {
+            setFormData(savedData);
+          }
+        } else {
+          // Initialize team members based on event type
+          const maxMembers = event.name === 'GameVerse' ? 2 : event.max_team_size;
+          const initialMembers = Array(maxMembers).fill(null).map(() => ({
+            full_name: '',
+            email: '',
+            phone: '',
+            gender: '',
+            department: '',
+            year_of_study: '',
+            college: '',
+            city: '',
+            state: '',
+          }));
+          setFormData(prev => ({ ...prev, teamMembers: initialMembers }));
+        }
         setExpandedMember(0);
       }
     }
@@ -137,6 +204,44 @@ const Registration = () => {
       };
       return { ...prev, teamMembers: newMembers };
     });
+  };
+
+  // Copy team leader details to all other members
+  const handleCopyLeaderToOthers = () => {
+    const leaderDetails = formData.teamMembers[0];
+    if (!leaderDetails.full_name) {
+      alert('Please fill in team leader details first');
+      return;
+    }
+
+    setFormData(prev => {
+      const newMembers = [...prev.teamMembers];
+      for (let i = 1; i < newMembers.length; i++) {
+        newMembers[i] = {
+          ...leaderDetails
+        };
+      }
+      return { ...prev, teamMembers: newMembers };
+    });
+    alert('Team leader details copied to all members!');
+  };
+
+  // Load saved form data
+  const handleLoadSavedData = () => {
+    const savedData = loadFormFromLocalStorage();
+    if (savedData) {
+      setFormData(savedData);
+      alert('Previous data loaded successfully!');
+    }
+  };
+
+  // Clear saved form data
+  const handleClearSavedData = () => {
+    if (window.confirm('Are you sure you want to clear all saved data?')) {
+      clearFormFromLocalStorage();
+      setHasSavedData(false);
+      alert('Saved data cleared!');
+    }
   };
 
   const validateForm = (): boolean => {
@@ -253,8 +358,17 @@ const Registration = () => {
       });
 
       // Step 2: Add all team members with their personal details
-      const memberNames = actualMembers.map(m => m.full_name);
-      await addTeamMembers(team.id, memberNames);
+      await addTeamMembers(team.id, actualMembers.map(m => ({
+        member_name: m.full_name,
+        member_email: m.email,
+        member_phone: m.phone,
+        gender: m.gender,
+        department: m.department,
+        year_of_study: m.year_of_study,
+        college: m.college,
+        city: m.city,
+        state: m.state
+      })));
 
       // Step 3: Create registration record
       await createRegistration(team.id, selectedEvent.id, user.id);
@@ -391,6 +505,43 @@ const Registration = () => {
                 Team Members ({actualMemberCount}/{selectedEvent.max_team_size})
               </h2>
               {errors.teamMembers && <p className="text-red-400 text-sm">{errors.teamMembers}</p>}
+            </div>
+
+            {/* Auto-fill Options */}
+            <div className="mb-4 flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleCopyLeaderToOthers}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                title="Copy team leader's details to all other members"
+              >
+                <Copy className="w-4 h-4" />
+                Copy Leader Details
+              </button>
+
+              {hasSavedData && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleLoadSavedData}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                    title="Load your previously saved registration data"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Load Saved Data
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearSavedData}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                    title="Clear all saved registration data"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Clear Saved
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -579,6 +730,7 @@ const Registration = () => {
 
             <div className="mt-4 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-300 text-sm">
               <p>💡 Each team member must fill in their personal details. Member 1 is the team leader.</p>
+              <p className="mt-2 text-gray-400">💾 Your form is automatically saved as you type.</p>
             </div>
           </div>
 

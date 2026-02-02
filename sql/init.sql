@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS teams (
   team_name VARCHAR(255) NOT NULL,
   college_name VARCHAR(255) DEFAULT '',
   phone_number VARCHAR(15),
+  team_size INTEGER DEFAULT 0,
+  is_onspot BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT unique_team_per_user_per_event UNIQUE(event_id, user_id)
 );
