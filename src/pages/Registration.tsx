@@ -196,6 +196,22 @@ const Registration = () => {
   };
 
   const handleMemberChange = (index: number, field: keyof TeamMemberDetails, value: string) => {
+    // PRODUCTION RULE: Never allow null or empty email/phone to be saved
+    if (field === 'email' && value) {
+      // Trim whitespace and reject if empty
+      value = value.trim();
+      if (!value) {
+        // User cleared the field - that's ok during typing, don't update
+        return;
+      }
+      // Allow any non-empty value during typing (validation happens on submit)
+    }
+    
+    if (field === 'phone' && value) {
+      // Phone can only contain digits
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+
     setFormData(prev => {
       const newMembers = [...prev.teamMembers];
       newMembers[index] = {
@@ -270,35 +286,36 @@ const Registration = () => {
 
     // Validate each member's details
     actualMembers.forEach((member, idx) => {
-      if (!member.full_name.trim()) {
+      // Check all required fields are non-empty
+      if (!member.full_name || !member.full_name.trim()) {
         newErrors[`member_${idx}_name`] = 'Name is required';
       }
-      if (!member.email.trim()) {
+      if (!member.email || !member.email.trim()) {
         newErrors[`member_${idx}_email`] = 'Email is required';
       } else if (!validateEmail(member.email)) {
         newErrors[`member_${idx}_email`] = 'Invalid email format';
       }
-      if (!member.phone.trim()) {
+      if (!member.phone || !member.phone.trim()) {
         newErrors[`member_${idx}_phone`] = 'Phone is required';
       } else if (!validatePhone(member.phone)) {
         newErrors[`member_${idx}_phone`] = 'Phone must be 10 digits';
       }
-      if (!member.gender) {
+      if (!member.gender || !member.gender.trim()) {
         newErrors[`member_${idx}_gender`] = 'Gender is required';
       }
-      if (!member.department.trim()) {
+      if (!member.department || !member.department.trim()) {
         newErrors[`member_${idx}_department`] = 'Department is required';
       }
-      if (!member.year_of_study) {
+      if (!member.year_of_study || !member.year_of_study.trim()) {
         newErrors[`member_${idx}_year`] = 'Year of study is required';
       }
-      if (!member.college.trim()) {
+      if (!member.college || !member.college.trim()) {
         newErrors[`member_${idx}_college`] = 'College is required';
       }
-      if (!member.city.trim()) {
+      if (!member.city || !member.city.trim()) {
         newErrors[`member_${idx}_city`] = 'City is required';
       }
-      if (!member.state.trim()) {
+      if (!member.state || !member.state.trim()) {
         newErrors[`member_${idx}_state`] = 'State is required';
       }
     });
@@ -333,6 +350,48 @@ const Registration = () => {
       // Get actual team members (filter empty ones)
       const actualMembers = formData.teamMembers.filter(m => m.full_name.trim());
 
+      // ========== PRODUCTION SAFETY CHECKS ==========
+      // CRITICAL: Ensure all members have email and phone (NOT NULL)
+      const hasIncompleteMembers = actualMembers.some(m => !m.email?.trim() || !m.phone?.trim());
+      if (hasIncompleteMembers) {
+        setError('CRITICAL: All team members must have email and phone filled in');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Double-check: Validate email format and non-null before sending to backend
+      for (let i = 0; i < actualMembers.length; i++) {
+        const member = actualMembers[i];
+        
+        // Email CANNOT be null or empty
+        if (!member.email || member.email.trim() === '') {
+          setError(`Member ${i + 1}: Email cannot be empty or null`);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        // Email format validation
+        if (!validateEmail(member.email)) {
+          setError(`Member ${i + 1}: Invalid email format`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Phone CANNOT be null or empty
+        if (!member.phone || member.phone.trim() === '') {
+          setError(`Member ${i + 1}: Phone cannot be empty or null`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Phone format validation
+        if (!validatePhone(member.phone)) {
+          setError(`Member ${i + 1}: Phone must be exactly 10 digits`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // Pre-check: ensure user hasn't already registered for this event
       try {
         const existing = await fetchUserRegistrations();
@@ -346,7 +405,7 @@ const Registration = () => {
         console.warn('Could not verify existing registrations before submit', e);
       }
 
-      // Step 1: Create team
+      // Step 1: Create team (IDEMPOTENT: safe to retry)
       const team = await createTeam({
         event_id: selectedEvent.id,
         user_id: user.id,
@@ -357,11 +416,11 @@ const Registration = () => {
         is_onspot: false,
       });
 
-      // Step 2: Add all team members with their personal details
+      // Step 2: Add all team members with their personal details (IDEMPOTENT: safe to retry)
       await addTeamMembers(team.id, actualMembers.map(m => ({
         member_name: m.full_name,
-        member_email: m.email,
-        member_phone: m.phone,
+        member_email: m.email, // GUARANTEED non-null by validation above
+        member_phone: m.phone, // GUARANTEED non-null by validation above
         gender: m.gender,
         department: m.department,
         year_of_study: m.year_of_study,
@@ -392,6 +451,10 @@ const Registration = () => {
       const totalAmount = actualMembers.length * selectedEvent.price_per_head;
       await createPayment(team.id, selectedEvent.id, user.id, totalAmount);
 
+      // Clear localStorage after successful registration
+      clearFormFromLocalStorage();
+      setHasSavedData(false);
+
       // Show success message
       setError('');
       setIsSubmitting(false);
@@ -401,6 +464,8 @@ const Registration = () => {
       const message = err instanceof Error ? err.message : 'Registration failed';
       if (message.includes('23505') || message.includes('unique')) {
         setError('You have already registered for this event');
+      } else if (message.includes('member_email') || message.includes('email')) {
+        setError(`Backend validation error: ${message}. Please ensure all emails are valid and non-empty.`);
       } else {
         setError(message);
       }

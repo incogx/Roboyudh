@@ -277,8 +277,18 @@ export async function fetchTeamsByEvent(eventId: string): Promise<Team[]> {
 }
 
 /**
- * Create a new team for current user
+ * Create a new team for current user (IDEMPOTENT)
+ * 
+ * Production Features:
+ * - Checks if team already exists for this user+event combination
+ * - If exists, returns existing team (IDEMPOTENT: safe to retry)
+ * - If not, creates new team
+ * - Validates all required fields are non-null and non-empty
+ * - Proper error messages for debugging
+ * 
  * Requires: event_id, user_id, team_name, college_name, phone_number, team_size
+ * 
+ * @throws Error if inputs invalid or database error
  */
 export async function createTeam(team: {
   event_id: string;
@@ -289,6 +299,29 @@ export async function createTeam(team: {
   team_size: number;
   is_onspot?: boolean;
 }): Promise<Team> {
+  // ========== VALIDATION ==========
+  if (!team.event_id?.trim()) throw new Error('event_id is required');
+  if (!team.user_id?.trim()) throw new Error('user_id is required');
+  if (!team.team_name?.trim()) throw new Error('team_name is required');
+  if (!team.college_name?.trim()) throw new Error('college_name is required');
+  if (!team.phone_number?.trim()) throw new Error('phone_number is required');
+  if (!team.team_size || team.team_size < 1) throw new Error('team_size must be >= 1');
+
+  // ========== CHECK FOR EXISTING TEAM (IDEMPOTENCY) ==========
+  const { data: existingTeams, error: fetchError } = await supabase
+    .from('teams')
+    .select('*')
+    .eq('event_id', team.event_id)
+    .eq('user_id', team.user_id);
+
+  if (fetchError) throw new Error(`Failed to check existing teams: ${fetchError.message}`);
+
+  if (existingTeams && existingTeams.length > 0) {
+    console.warn(`Team already exists for user ${team.user_id} in event ${team.event_id}. Returning existing team.`);
+    return existingTeams[0];
+  }
+
+  // ========== CREATE NEW TEAM ==========
   const { data, error } = await supabase
     .from('teams')
     .insert([{
@@ -298,7 +331,23 @@ export async function createTeam(team: {
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to create team: ${error.message}`);
+  if (error) {
+    // Catch duplicate key constraint violation
+    if (error.message.includes('23505') || error.message.includes('unique')) {
+      console.warn(`Unique constraint violation - team may already exist. Retrying fetch...`);
+      const { data: retryData, error: retryError } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('event_id', team.event_id)
+        .eq('user_id', team.user_id)
+        .single();
+      if (retryError) throw new Error(`Failed to create team and retry fetch: ${retryError.message}`);
+      return retryData;
+    }
+    throw new Error(`Failed to create team: ${error.message}`);
+  }
+
+  if (!data) throw new Error('Team creation returned no data');
   return data;
 }
 
@@ -375,26 +424,116 @@ export interface TeamMemberInput {
 }
 
 export async function addTeamMembers(teamId: string, memberDetails: TeamMemberInput[]): Promise<TeamMember[]> {
-  const members = memberDetails.map(detail => ({ 
-    team_id: teamId,
-    member_name: detail.member_name,
-    member_email: detail.member_email,
-    member_phone: detail.member_phone,
-    gender: detail.gender || null,
-    department: detail.department || null,
-    year_of_study: detail.year_of_study || null,
-    college: detail.college || null,
-    city: detail.city || null,
-    state: detail.state || null
-  }));
-  
+  // ========== VALIDATION ==========
+  if (!teamId?.trim()) {
+    throw new Error('teamId is required');
+  }
+
+  if (!memberDetails || !Array.isArray(memberDetails) || memberDetails.length === 0) {
+    throw new Error('At least one member is required');
+  }
+
+  // Validate each member has required fields (email and phone are CRITICAL)
+  for (let i = 0; i < memberDetails.length; i++) {
+    const detail = memberDetails[i];
+
+    // These fields are NOT NULLABLE in database - validate strictly
+    if (!detail.member_name?.trim()) {
+      throw new Error(`Member ${i + 1}: name is required and cannot be empty`);
+    }
+    if (!detail.member_email?.trim()) {
+      throw new Error(`Member ${i + 1}: email is required and cannot be empty`);
+    }
+    if (!detail.member_phone?.trim()) {
+      throw new Error(`Member ${i + 1}: phone is required and cannot be empty`);
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(detail.member_email)) {
+      throw new Error(`Member ${i + 1}: email format is invalid (${detail.member_email})`);
+    }
+
+    // Phone length validation (basic: should be 10-15 digits)
+    const phoneDigits = detail.member_phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      throw new Error(`Member ${i + 1}: phone must be at least 10 digits`);
+    }
+  }
+
+  // ========== CHECK FOR DUPLICATE MEMBERS (IDEMPOTENCY) ==========
+  // Get existing members for this team
+  const { data: existingMembers, error: fetchError } = await supabase
+    .from('team_members')
+    .select('member_email')
+    .eq('team_id', teamId);
+
+  if (fetchError) {
+    throw new Error(`Failed to check existing members: ${fetchError.message}`);
+  }
+
+  const existingEmails = new Set((existingMembers || []).map(m => m.member_email?.toLowerCase()));
+
+  // Filter out members that already exist (IDEMPOTENCY)
+  const newMembers = memberDetails.filter(detail => {
+    const emailLower = detail.member_email?.toLowerCase();
+    if (existingEmails.has(emailLower)) {
+      console.warn(`Member with email ${detail.member_email} already exists in team. Skipping.`);
+      return false;
+    }
+    return true;
+  });
+
+  // If all members already exist, return existing members
+  if (newMembers.length === 0) {
+    console.warn(`All members already exist in team ${teamId}. Returning existing members.`);
+    return existingMembers || [];
+  }
+
+  // ========== BUILD MEMBER OBJECTS WITH STRICT VALIDATION ==========
+  const members = newMembers.map(detail => {
+    // IMPORTANT: Do NOT set member_email to null. If empty, throw error (already validated above)
+    return {
+      team_id: teamId,
+      member_name: detail.member_name.trim(),
+      member_email: detail.member_email.trim(), // NEVER null - validated above
+      member_phone: detail.member_phone.trim(), // NEVER null - validated above
+      gender: detail.gender?.trim() || null,
+      department: detail.department?.trim() || null,
+      year_of_study: detail.year_of_study?.trim() || null,
+      college: detail.college?.trim() || null,
+      city: detail.city?.trim() || null,
+      state: detail.state?.trim() || null
+    };
+  });
+
+  // ========== INSERT MEMBERS ==========
   const { data, error } = await supabase
     .from('team_members')
     .insert(members)
     .select();
 
-  if (error) throw new Error(`Failed to add team members: ${error.message}`);
-  return data || [];
+  if (error) {
+    throw new Error(`Failed to add team members: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error('Member insertion returned no data');
+  }
+
+  // Return ALL members (newly inserted + existing)
+  const allMembersResult = await supabase
+    .from('team_members')
+    .select('*')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: true });
+
+  if (allMembersResult.error) {
+    console.warn('Could not fetch all members after insert:', allMembersResult.error);
+    return data; // Return at least what we inserted
+  }
+
+  return allMembersResult.data || [];
 }
 
 /**
