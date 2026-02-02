@@ -437,25 +437,30 @@ export async function addTeamMembers(teamId: string, memberDetails: TeamMemberIn
   for (let i = 0; i < memberDetails.length; i++) {
     const detail = memberDetails[i];
 
+    // Convert undefined to empty string for validation
+    const name = (detail.member_name || '').toString().trim();
+    const email = (detail.member_email || '').toString().trim();
+    const phone = (detail.member_phone || '').toString().trim();
+
     // These fields are NOT NULLABLE in database - validate strictly
-    if (!detail.member_name?.trim()) {
+    if (!name) {
       throw new Error(`Member ${i + 1}: name is required and cannot be empty`);
     }
-    if (!detail.member_email?.trim()) {
+    if (!email) {
       throw new Error(`Member ${i + 1}: email is required and cannot be empty`);
     }
-    if (!detail.member_phone?.trim()) {
+    if (!phone) {
       throw new Error(`Member ${i + 1}: phone is required and cannot be empty`);
     }
 
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(detail.member_email)) {
-      throw new Error(`Member ${i + 1}: email format is invalid (${detail.member_email})`);
+    if (!emailRegex.test(email)) {
+      throw new Error(`Member ${i + 1}: email format is invalid (${email})`);
     }
 
     // Phone length validation (basic: should be 10-15 digits)
-    const phoneDigits = detail.member_phone.replace(/\D/g, '');
+    const phoneDigits = phone.replace(/\D/g, '');
     if (phoneDigits.length < 10) {
       throw new Error(`Member ${i + 1}: phone must be at least 10 digits`);
     }
@@ -476,7 +481,7 @@ export async function addTeamMembers(teamId: string, memberDetails: TeamMemberIn
 
   // Filter out members that already exist (IDEMPOTENCY)
   const newMembers = memberDetails.filter(detail => {
-    const emailLower = detail.member_email?.toLowerCase();
+    const emailLower = (detail.member_email || '').toString().toLowerCase();
     if (existingEmails.has(emailLower)) {
       console.warn(`Member with email ${detail.member_email} already exists in team. Skipping.`);
       return false;
@@ -492,18 +497,27 @@ export async function addTeamMembers(teamId: string, memberDetails: TeamMemberIn
 
   // ========== BUILD MEMBER OBJECTS WITH STRICT VALIDATION ==========
   const members = newMembers.map(detail => {
-    // IMPORTANT: Do NOT set member_email to null. If empty, throw error (already validated above)
+    // CRITICAL: ALWAYS trim and ensure non-null
+    const member_name = (detail.member_name || '').toString().trim();
+    const member_email = (detail.member_email || '').toString().trim();
+    const member_phone = (detail.member_phone || '').toString().trim();
+
+    // Final safety check - throw if any are empty
+    if (!member_name || !member_email || !member_phone) {
+      throw new Error(`CRITICAL: Cannot insert member with empty required field. Name: "${member_name}", Email: "${member_email}", Phone: "${member_phone}"`);
+    }
+
     return {
       team_id: teamId,
-      member_name: detail.member_name.trim(),
-      member_email: detail.member_email.trim(), // NEVER null - validated above
-      member_phone: detail.member_phone.trim(), // NEVER null - validated above
-      gender: detail.gender?.trim() || null,
-      department: detail.department?.trim() || null,
-      year_of_study: detail.year_of_study?.trim() || null,
-      college: detail.college?.trim() || null,
-      city: detail.city?.trim() || null,
-      state: detail.state?.trim() || null
+      member_name: member_name,
+      member_email: member_email, // NEVER null, NEVER empty
+      member_phone: member_phone, // NEVER null, NEVER empty
+      gender: (detail.gender || '').toString().trim() || null,
+      department: (detail.department || '').toString().trim() || null,
+      year_of_study: (detail.year_of_study || '').toString().trim() || null,
+      college: (detail.college || '').toString().trim() || null,
+      city: (detail.city || '').toString().trim() || null,
+      state: (detail.state || '').toString().trim() || null
     };
   });
 

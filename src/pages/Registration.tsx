@@ -417,17 +417,31 @@ const Registration = () => {
       });
 
       // Step 2: Add all team members with their personal details (IDEMPOTENT: safe to retry)
-      await addTeamMembers(team.id, actualMembers.map(m => ({
-        member_name: m.full_name,
-        member_email: m.email, // GUARANTEED non-null by validation above
-        member_phone: m.phone, // GUARANTEED non-null by validation above
-        gender: m.gender,
-        department: m.department,
-        year_of_study: m.year_of_study,
-        college: m.college,
-        city: m.city,
-        state: m.state
-      })));
+      // ULTRA-STRICT: Ensure EVERY field is non-empty before sending
+      const membersToSubmit = actualMembers.map(m => {
+        const email = (m.email || '').trim();
+        const phone = (m.phone || '').trim();
+        const name = (m.full_name || '').trim();
+        
+        // CRITICAL: Reject if any are empty
+        if (!email) throw new Error(`One or more members have empty email - cannot proceed`);
+        if (!phone) throw new Error(`One or more members have empty phone - cannot proceed`);
+        if (!name) throw new Error(`One or more members have empty name - cannot proceed`);
+        
+        return {
+          member_name: name,
+          member_email: email, // GUARANTEED non-empty
+          member_phone: phone, // GUARANTEED non-empty
+          gender: (m.gender || '').trim() || undefined,
+          department: (m.department || '').trim() || undefined,
+          year_of_study: (m.year_of_study || '').trim() || undefined,
+          college: (m.college || '').trim() || undefined,
+          city: (m.city || '').trim() || undefined,
+          state: (m.state || '').trim() || undefined
+        };
+      });
+
+      await addTeamMembers(team.id, membersToSubmit);
 
       // Step 3: Create registration record
       await createRegistration(team.id, selectedEvent.id, user.id);
