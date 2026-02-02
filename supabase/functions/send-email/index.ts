@@ -14,6 +14,7 @@ interface EmailRequest {
   type: 'approval' | 'rejection'
   teamName: string
   eventName: string
+  teamLeaderName: string
   eventDate: string
   ticketCode?: string
   rejectionReason?: string
@@ -46,7 +47,7 @@ const generateApprovalEmailHTML = (data: EmailRequest): string => {
       </p>
       
       <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin: 0 0 30px 0;">
-        Your event ticket has been generated. Please make sure all members carry the ticket (digital or printed) on the event day.
+        Attached are your <strong>event tickets</strong>. Please make sure all members carry the ticket (digital or printed) on the event day.
       </p>
       
       <!-- Ticket Code Box -->
@@ -96,8 +97,8 @@ const generateApprovalEmailHTML = (data: EmailRequest): string => {
       <div style="border-top: 1px solid #e5e7eb; padding-top: 20px;">
         <p style="color: #6b7280; margin: 0; font-size: 14px; line-height: 1.6;">
           Regards,<br/>
-          <strong>ROBOYUDH Team</strong><br/>
-          Sathyabama Institute of Science and Technology
+          <strong>${data.teamLeaderName}</strong><br/>
+          <strong>${data.eventName} Team</strong>
         </p>
       </div>
     </div>

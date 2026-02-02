@@ -113,12 +113,9 @@ export interface Payment {
   event_id: string;
   user_id: string;
   amount: number;
-  transaction_id: string | null;
-  screenshot_url: string | null;
   status: PaymentStatus;
   admin_comment: string | null;
   rejection_reason: string | null;
-  admin_decision_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -159,10 +156,7 @@ export interface Registration {
   amount: number;
   payment_id: string | null;
   payment_status: string;
-  transaction_id: string | null;
-  screenshot_url: string | null;
   ticket_code: string | null;
-  qr_code_data: string | null;
   created_at: string;
   member_names: string[];
 }
@@ -555,32 +549,7 @@ export async function createPayment(
   return data;
 }
 
-/**
- * @deprecated This function is no longer used in the offline payment flow.
- * Submit payment proof (PENDING → WAITING) - DEPRECATED
- * Keep for backward compatibility only
- */
-export async function submitPaymentProof(
-  paymentId: string,
-  transactionId: string,
-  screenshotUrl: string
-): Promise<Payment> {
-  // This function is deprecated and should not be used
-  // Kept for backward compatibility with existing code
-  const { data, error } = await supabase
-    .from('payments')
-    .update({ 
-      transaction_id: transactionId,
-      screenshot_url: screenshotUrl
-    })
-    .eq('id', paymentId)
-    .eq('status', 'PENDING')
-    .select()
-    .single();
 
-  if (error) throw new Error(`Failed to update payment: ${error.message}`);
-  return data;
-}
 
 /**
  * Approve payment (PENDING → APPROVED) - Admin only
@@ -950,7 +919,6 @@ export async function createOnSpotRegistration(
         event_id: eventId,
         user_id: user.id,
         amount,
-        transaction_id: `ONSPOT-${Date.now()}`,
         status: 'APPROVED',
         admin_comment: 'On-spot registration - cash payment received'
       }])

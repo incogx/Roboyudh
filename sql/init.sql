@@ -1,17 +1,20 @@
 -- ============================================================
--- ROBOYUDH 2026 - CLEAN DATABASE SETUP (NO ERRORS)
+-- ROBOYUDH 2026 - CLEAN DATABASE SETUP
 -- ============================================================
 -- Admin Email: organizers.roboyudh@gmail.com
--- Tables: events, teams, team_members, registrations, payments, tickets
--- RLS: YES (Secure - users see own data only)
--- Audit Log: NO
+-- Events: 6 (Line Follower, RC Racing, RoboSumo, RoboSoccer, Obstacle Run, GameVerse)
+-- Dates: 26-27 FEB 2026
+-- Payment Model: OFFLINE ONLY (PENDING → APPROVED/REJECTED)
+-- No Online Payments, No Transaction IDs, No Payment Proof Uploads
 -- ============================================================
 
 -- EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- ============================================================
 -- ADMIN CHECK FUNCTION
+-- ============================================================
 CREATE OR REPLACE FUNCTION is_admin(user_email TEXT)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -20,7 +23,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 -- ============================================================
--- TABLE 1: EVENTS
+-- TABLE 1: EVENTS (6 events with dates, venue, reporting time)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,6 +32,8 @@ CREATE TABLE IF NOT EXISTS events (
   description TEXT DEFAULT '',
   rules TEXT[] DEFAULT '{}',
   event_date DATE,
+  reporting_time VARCHAR(50) DEFAULT '08:40 AM',
+  venue VARCHAR(500) DEFAULT 'Sathyabama Institute of Science and Technology, Chennai',
   max_team_size INTEGER DEFAULT 5,
   price_per_head INTEGER DEFAULT 0,
   image_url TEXT,
@@ -66,32 +71,43 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE INDEX IF NOT EXISTS idx_teams_event_id ON teams(event_id);
 CREATE INDEX IF NOT EXISTS idx_teams_user_id ON teams(user_id);
 
--- RLS: Users see own teams
+-- RLS: Users see own teams, admin sees all
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "teams_select_own" ON teams;
-CREATE POLICY "teams_select_own" ON teams FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "teams_select_own" ON teams FOR SELECT 
+  USING (user_id = auth.uid() OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 DROP POLICY IF EXISTS "teams_insert_own" ON teams;
 CREATE POLICY "teams_insert_own" ON teams FOR INSERT WITH CHECK (user_id = auth.uid());
 
 -- ============================================================
--- TABLE 3: TEAM MEMBERS
+-- TABLE 3: TEAM MEMBERS (with full personal details)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   member_name VARCHAR(255) NOT NULL,
-  member_email VARCHAR(255) DEFAULT '',
+  member_email VARCHAR(255) NOT NULL,
+  member_phone VARCHAR(15) NOT NULL,
+  gender VARCHAR(50),
+  department VARCHAR(255),
+  year_of_study VARCHAR(50),
+  college VARCHAR(255),
+  city VARCHAR(255),
+  state VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_team_members_team_id ON team_members(team_id);
 
--- RLS: Users see own team members
+-- RLS: Users see own team members, admin sees all
 ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "team_members_select_own" ON team_members;
 CREATE POLICY "team_members_select_own" ON team_members FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM teams WHERE teams.id = team_members.team_id AND teams.user_id = auth.uid()));
+  USING (
+    EXISTS (SELECT 1 FROM teams WHERE teams.id = team_members.team_id AND teams.user_id = auth.uid())
+    OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email'))
+  );
 
 DROP POLICY IF EXISTS "team_members_insert_own" ON team_members;
 CREATE POLICY "team_members_insert_own" ON team_members FOR INSERT 
@@ -112,25 +128,68 @@ CREATE TABLE IF NOT EXISTS registrations (
 CREATE INDEX IF NOT EXISTS idx_registrations_user_id ON registrations(user_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_event_id ON registrations(event_id);
 
--- RLS: Users see own registrations
+-- RLS: Users see own registrations, admin sees all
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "registrations_select_own" ON registrations;
-CREATE POLICY "registrations_select_own" ON registrations FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "registrations_select_own" ON registrations FOR SELECT 
+  USING (user_id = auth.uid() OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 DROP POLICY IF EXISTS "registrations_insert_own" ON registrations;
 CREATE POLICY "registrations_insert_own" ON registrations FOR INSERT WITH CHECK (user_id = auth.uid());
 
 -- ============================================================
--- TABLE 5: PAYMENTS
+-- TABLE 5: REGISTRATION DETAILS (Extended personal information)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS registration_details (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  team_leader_name VARCHAR(255),
+  full_name VARCHAR(255),
+  gender VARCHAR(50),
+  mobile_number VARCHAR(15),
+  email VARCHAR(255),
+  college_name VARCHAR(255),
+  city VARCHAR(255),
+  state VARCHAR(255),
+  department VARCHAR(255),
+  year_of_study VARCHAR(50),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_registration_details_per_team UNIQUE(team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_registration_details_team_id ON registration_details(team_id);
+
+-- RLS: Users see own details, admin sees all
+ALTER TABLE registration_details ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "registration_details_select_own" ON registration_details;
+CREATE POLICY "registration_details_select_own" ON registration_details FOR SELECT 
+  USING (
+    EXISTS (SELECT 1 FROM teams WHERE teams.id = registration_details.team_id AND teams.user_id = auth.uid())
+    OR is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email'))
+  );
+
+DROP POLICY IF EXISTS "registration_details_insert_own" ON registration_details;
+CREATE POLICY "registration_details_insert_own" ON registration_details FOR INSERT 
+  WITH CHECK (EXISTS (SELECT 1 FROM teams WHERE teams.id = registration_details.team_id AND teams.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "registration_details_update_own" ON registration_details;
+CREATE POLICY "registration_details_update_own" ON registration_details FOR UPDATE 
+  USING (EXISTS (SELECT 1 FROM teams WHERE teams.id = registration_details.team_id AND teams.user_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM teams WHERE teams.id = registration_details.team_id AND teams.user_id = auth.uid()));
+
+-- ============================================================
+-- TABLE 6: PAYMENTS (Offline only - NO transaction_id, NO screenshot_file_path)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
-  amount DECIMAL(10, 2) DEFAULT 0,
+  amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
   status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
   rejection_reason TEXT DEFAULT '',
+  admin_comment TEXT DEFAULT '',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT unique_payment_per_team UNIQUE(team_id)
@@ -140,7 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_team_id ON payments(team_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 
--- TRIGGER: Payment state validation
+-- TRIGGER: Payment state validation (PENDING → APPROVED/REJECTED only, final states locked)
 CREATE OR REPLACE FUNCTION validate_payment_transition()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -149,7 +208,7 @@ BEGIN
     RAISE EXCEPTION 'Payment can only go from PENDING to APPROVED or REJECTED';
   END IF;
   IF OLD.status IN ('APPROVED', 'REJECTED') THEN
-    RAISE EXCEPTION 'Payment status is LOCKED (final state)';
+    RAISE EXCEPTION 'Payment status is LOCKED (final state cannot be changed)';
   END IF;
   RETURN NEW;
 END;
@@ -178,14 +237,16 @@ CREATE POLICY "payments_update_admin" ON payments FOR UPDATE
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 -- ============================================================
--- TABLE 6: TICKETS
+-- TABLE 7: TICKETS (Generated by admin on payment approval)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
   team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   ticket_code VARCHAR(255) UNIQUE NOT NULL,
+  ticket_pdf_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -204,13 +265,67 @@ CREATE POLICY "tickets_insert_admin" ON tickets FOR INSERT
   WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
 
 -- ============================================================
--- SEED DATA (6 Events - Correct Pricing & Team Sizes)
+-- TABLE 8: AUDIT LOG (for admin actions)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_email VARCHAR(255) NOT NULL,
+  action VARCHAR(255) NOT NULL,
+  target_type VARCHAR(100),
+  target_id UUID,
+  details JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_admin ON audit_log(admin_email);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+
+-- RLS: Admin only
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "audit_log_select_admin" ON audit_log;
+CREATE POLICY "audit_log_select_admin" ON audit_log FOR SELECT 
+  USING (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
+
+DROP POLICY IF EXISTS "audit_log_insert_admin" ON audit_log;
+CREATE POLICY "audit_log_insert_admin" ON audit_log FOR INSERT 
+  WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
+
+-- ============================================================
+-- TABLE 9: LEADERBOARD (for event scores/rankings)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS leaderboard (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  score INTEGER DEFAULT 0,
+  rank INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_leaderboard_entry UNIQUE(event_id, team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_leaderboard_event_id ON leaderboard(event_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_team_id ON leaderboard(team_id);
+
+-- RLS: Everyone sees leaderboard
+ALTER TABLE leaderboard ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "leaderboard_select_all" ON leaderboard;
+CREATE POLICY "leaderboard_select_all" ON leaderboard FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "leaderboard_insert_admin" ON leaderboard;
+CREATE POLICY "leaderboard_insert_admin" ON leaderboard FOR INSERT 
+  WITH CHECK (is_admin((current_setting('request.jwt.claims', true)::jsonb ->> 'email')));
+
+-- ============================================================
+-- SEED DATA: 6 EVENTS
 -- ============================================================
 -- PRICING RULES:
--- - All technical events: ₹200 per head, 2-5 members per team
--- - GameVerse: ₹200 per head, 2 members per team (exactly 2)
+-- - Technical Events (Line Follower, RC Racing, RoboSumo, RoboSoccer, Obstacle Run): ₹200 per head, max 5 members
+-- - GameVerse (Non-Tech): ₹100 per head, exactly 2 members
+-- - Dates: 26-27 FEB 2026
 -- ============================================================
-INSERT INTO events (id, name, category, description, rules, event_date, max_team_size, price_per_head, image_url, rulebook_url, is_active)
+
+INSERT INTO events (id, name, category, description, rules, event_date, reporting_time, venue, max_team_size, price_per_head, image_url, rulebook_url, is_active)
 VALUES
   (
     '550e8400-e29b-41d4-a716-446655440001', 
@@ -222,10 +337,11 @@ VALUES
       'Autonomous navigation only - no manual control',
       'Fastest completion wins',
       'Robot must stay on the line throughout',
-      'Penalties for leaving track or stopping',
-      'Price: ₹200 per head'
+      'Penalties for leaving track or stopping'
     ],
     '2026-02-26', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     5, 
     200, 
     '/images/line_follower.png',
@@ -242,10 +358,11 @@ VALUES
       'RC car must be self-built or modified',
       'Time-based scoring system',
       'Multiple heats with best time counting',
-      'Safety gear mandatory for participants',
-      'Price: ₹200 per head'
+      'Safety gear mandatory for participants'
     ],
     '2026-02-27', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     5, 
     200, 
     '/images/robo_racing.png',
@@ -262,10 +379,11 @@ VALUES
       'Weight limit: 3kg maximum',
       'Size limit: 20cm x 20cm base',
       'Knockout style elimination tournament',
-      'No projectiles or liquid weapons allowed',
-      'Price: ₹200 per head'
+      'No projectiles or liquid weapons allowed'
     ],
     '2026-02-27', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     5, 
     200, 
     '/images/robo_sumo.png',
@@ -282,10 +400,11 @@ VALUES
       'Robots must fit size specifications (30cm x 30cm x 30cm)',
       'Match duration: 10 minutes per half',
       'Manual or autonomous control allowed',
-      'Ball detection and kicking mechanisms required',
-      'Price: ₹200 per head'
+      'Ball detection and kicking mechanisms required'
     ],
-    '2026-02-27', 
+    '2026-02-26', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     5, 
     200, 
     '/images/RoboSoccer.png',
@@ -298,14 +417,15 @@ VALUES
     'non-tech', 
     'Compete in multiple gaming categories for the ultimate gaming championship. From strategy to action, test your gaming prowess across various titles.',
     ARRAY[
-      'Exactly 2 members per team (Minimum 2, Maximum 2)',
+      'Exactly 2 members per team (minimum 2, maximum 2)',
       'Multiple game categories (PUBG Mobile, COD Mobile, Free Fire, Valorant)',
       'Fair play and sportsmanship required',
       'No cheating or external tools allowed',
-      'Tournament bracket format',
-      'Price: ₹100 per head'
+      'Tournament bracket format'
     ],
     '2026-02-26', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     2, 
     100, 
     '/images/Game_verse.png',
@@ -322,10 +442,11 @@ VALUES
       'Manual or autonomous control allowed',
       'Points for each obstacle cleared',
       'Time bonus for faster completion',
-      'Multiple obstacle types including ramps, barriers, and narrow passages',
-      'Price: ₹200 per head'
+      'Multiple obstacle types including ramps, barriers, and narrow passages'
     ],
-    '2026-02-27', 
+    '2026-02-26', 
+    '08:40 AM',
+    'Sathyabama Institute of Science and Technology, Chennai',
     5, 
     200, 
     '/images/obstacle_run.png',
@@ -338,6 +459,8 @@ ON CONFLICT (id) DO UPDATE SET
   description = EXCLUDED.description,
   rules = EXCLUDED.rules,
   event_date = EXCLUDED.event_date,
+  reporting_time = EXCLUDED.reporting_time,
+  venue = EXCLUDED.venue,
   max_team_size = EXCLUDED.max_team_size,
   price_per_head = EXCLUDED.price_per_head,
   image_url = EXCLUDED.image_url,
@@ -345,5 +468,5 @@ ON CONFLICT (id) DO UPDATE SET
   is_active = EXCLUDED.is_active;
 
 -- ============================================================
--- END
+-- END OF SETUP
 -- ============================================================
