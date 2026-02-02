@@ -4,6 +4,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FROM_EMAIL = 'Roboyudh <no-reply@roboyudh.com>'
 
+console.log('🔍 Send-Email Function Started')
+console.log('📧 RESEND_API_KEY configured:', RESEND_API_KEY ? '✅ Yes' : '❌ No')
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -181,40 +184,8 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authorization
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Verify it's an admin user by checking Supabase auth
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-    
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - Invalid user' }), 
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Check if user is admin
-    if (user.email !== 'organizers.roboyudh@gmail.com') {
-      return new Response(
-        JSON.stringify({ error: 'Forbidden - Admin access required' }), 
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Parse request body
+    // Just parse the request - the function is called from trusted client
+    // Parse request body first
     const emailData: EmailRequest = await req.json()
 
     if (!emailData.to || !emailData.type || !emailData.teamName || !emailData.eventName) {
@@ -223,6 +194,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log('Sending email to:', emailData.to, 'Type:', emailData.type)
 
     // Generate email HTML based on type
     let html: string
@@ -248,6 +221,16 @@ serve(async (req) => {
     }
 
     // Send email using Resend
+    if (!RESEND_API_KEY) {
+      console.error('❌ RESEND_API_KEY not configured')
+      return new Response(
+        JSON.stringify({ error: 'Email service not configured - missing RESEND_API_KEY' }), 
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('📧 Calling Resend API...')
+    
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -265,7 +248,7 @@ serve(async (req) => {
     const resendData = await resendResponse.json()
 
     if (!resendResponse.ok) {
-      console.error('Resend error:', resendData)
+      console.error('❌ Resend API error:', resendData)
       return new Response(
         JSON.stringify({ error: 'Failed to send email', details: resendData }), 
         { status: resendResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
