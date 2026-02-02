@@ -176,14 +176,35 @@ const generateRejectionEmailHTML = (data: EmailRequest): string => {
 }
 
 serve(async (req) => {
+  console.log('📨 Request received:', req.method, req.url)
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('✅ CORS preflight')
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     // Parse request body
-    const emailData: EmailRequest = await req.json()
+    console.log('🔄 Parsing request body...')
+    let emailData: EmailRequest
+    try {
+      emailData = await req.json()
+      console.log('✅ Request parsed. Data:', {
+        to: emailData.to,
+        type: emailData.type,
+        teamName: emailData.teamName,
+        eventName: emailData.eventName,
+        eventDate: emailData.eventDate,
+        hasTicketCode: !!emailData.ticketCode
+      })
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON:', parseError)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body', details: parseError.message }), 
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     console.log('📧 Received email request for:', emailData.to, 'Type:', emailData.type)
 
@@ -243,6 +264,11 @@ serve(async (req) => {
 
     // Send email using Resend API
     console.log('📧 Calling Resend API...')
+    console.log('📧 Resend Details:', {
+      from: FROM_EMAIL,
+      to: emailData.to,
+      subject: subject.substring(0, 50) + '...'
+    })
     
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -258,10 +284,12 @@ serve(async (req) => {
       })
     })
 
+    console.log('📧 Resend API Response Status:', resendResponse.status)
+    
     const resendData = await resendResponse.json()
 
     if (!resendResponse.ok) {
-      console.error('❌ Resend API error:', resendData)
+      console.error('❌ Resend API error:', resendResponse.status, resendData)
       return new Response(
         JSON.stringify({ 
           error: 'Failed to send email', 
