@@ -573,42 +573,6 @@ const Registration = () => {
             </div>
 
             {/* Auto-fill Options */}
-            <div className="mb-4 flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={handleCopyLeaderToOthers}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                title="Copy team leader's details to all other members"
-              >
-                <Copy className="w-4 h-4" />
-                Copy Leader Details
-              </button>
-
-              {hasSavedData && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleLoadSavedData}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                    title="Load your previously saved registration data"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Load Saved Data
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClearSavedData}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors"
-                    title="Clear all saved registration data"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Clear Saved
-                  </button>
-                </>
-              )}
-            </div>
-
             <div className="space-y-3">
               {formData.teamMembers.map((member, index) => (
                 <div key={index} className="bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700 rounded-xl overflow-hidden">

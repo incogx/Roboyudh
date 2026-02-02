@@ -565,8 +565,7 @@ export async function createRegistration(
     .insert([{
       team_id: teamId,
       event_id: eventId,
-      user_id: userId,
-      status: 'ACTIVE'
+      user_id: userId
     }])
     .select()
     .single();
