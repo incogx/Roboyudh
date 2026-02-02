@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FROM_EMAIL = 'Roboyudh <no-reply@roboyudh.com>'
@@ -17,7 +16,6 @@ interface EmailRequest {
   type: 'approval' | 'rejection'
   teamName: string
   eventName: string
-  teamLeaderName: string
   eventDate: string
   ticketCode?: string
   rejectionReason?: string
@@ -100,8 +98,8 @@ const generateApprovalEmailHTML = (data: EmailRequest): string => {
       <div style="border-top: 1px solid #e5e7eb; padding-top: 20px;">
         <p style="color: #6b7280; margin: 0; font-size: 14px; line-height: 1.6;">
           Regards,<br/>
-          <strong>${data.teamLeaderName}</strong><br/>
-          <strong>${data.eventName} Team</strong>
+          <strong>ROBOYUDH Team</strong><br/>
+          Sathyabama Institute of Science and Technology
         </p>
       </div>
     </div>
@@ -184,18 +182,19 @@ serve(async (req) => {
   }
 
   try {
-    // Just parse the request - the function is called from trusted client
-    // Parse request body first
+    // Parse request body
     const emailData: EmailRequest = await req.json()
 
-    if (!emailData.to || !emailData.type || !emailData.teamName || !emailData.eventName) {
+    console.log('📧 Received email request for:', emailData.to, 'Type:', emailData.type)
+
+    // Validate required fields
+    if (!emailData.to || !emailData.type || !emailData.teamName || !emailData.eventName || !emailData.eventDate) {
+      console.error('❌ Missing required fields')
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, type, teamName, eventName' }), 
+        JSON.stringify({ error: 'Missing required fields: to, type, teamName, eventName, eventDate' }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    console.log('Sending email to:', emailData.to, 'Type:', emailData.type)
 
     // Generate email HTML based on type
     let html: string
@@ -203,6 +202,7 @@ serve(async (req) => {
 
     if (emailData.type === 'approval') {
       if (!emailData.ticketCode) {
+        console.error('❌ Ticket code missing for approval email')
         return new Response(
           JSON.stringify({ error: 'Ticket code is required for approval emails' }), 
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -210,25 +210,29 @@ serve(async (req) => {
       }
       subject = `🎉 ROBOYUDH 2026 - Registration Confirmed for ${emailData.eventName}`
       html = generateApprovalEmailHTML(emailData)
+      console.log('✅ Generated approval email')
     } else if (emailData.type === 'rejection') {
       subject = `ROBOYUDH 2026 - Registration Update for ${emailData.eventName}`
       html = generateRejectionEmailHTML(emailData)
+      console.log('✅ Generated rejection email')
     } else {
+      console.error('❌ Invalid email type:', emailData.type)
       return new Response(
         JSON.stringify({ error: 'Invalid email type. Must be "approval" or "rejection"' }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Send email using Resend
+    // Check if RESEND_API_KEY is configured
     if (!RESEND_API_KEY) {
-      console.error('❌ RESEND_API_KEY not configured')
+      console.error('❌ RESEND_API_KEY not configured in Edge Function secrets')
       return new Response(
-        JSON.stringify({ error: 'Email service not configured - missing RESEND_API_KEY' }), 
+        JSON.stringify({ error: 'Email service not configured - RESEND_API_KEY missing' }), 
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    // Send email using Resend API
     console.log('📧 Calling Resend API...')
     
     const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -250,10 +254,16 @@ serve(async (req) => {
     if (!resendResponse.ok) {
       console.error('❌ Resend API error:', resendData)
       return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: resendData }), 
+        JSON.stringify({ 
+          error: 'Failed to send email', 
+          details: resendData,
+          status: resendResponse.status 
+        }), 
         { status: resendResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log('✅ Email sent successfully! ID:', resendData.id)
 
     return new Response(
       JSON.stringify({ 
@@ -265,7 +275,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Edge function error:', error)
+    console.error('❌ Edge function error:', error)
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }), 
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
