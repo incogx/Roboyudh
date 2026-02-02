@@ -133,7 +133,6 @@ export interface Ticket {
   payment_id: string;
   ticket_code: string;
   qr_code_data: string | null;
-  pdf_url: string | null;
   created_at: string;
 }
 
@@ -865,8 +864,7 @@ export async function createTicket(
   eventId: string,
   userId: string,
   paymentId: string,
-  ticketCode: string,
-  pdfUrl?: string
+  ticketCode: string
 ): Promise<Ticket> {
   const { data, error } = await supabase
     .from('tickets')
@@ -876,8 +874,7 @@ export async function createTicket(
       user_id: userId,
       payment_id: paymentId,
       ticket_code: ticketCode,
-      qr_code_url: null,
-      pdf_url: pdfUrl || null
+      qr_code_data: null
     }])
     .select()
     .single();
@@ -887,12 +884,12 @@ export async function createTicket(
 }
 
 /**
- * Update ticket PDF URL
+ * Update ticket QR code
  */
-export async function updateTicketPdf(ticketId: string, pdfUrl: string): Promise<Ticket> {
+export async function updateTicketQrCode(ticketId: string, qrCodeData: string): Promise<Ticket> {
   const { data, error } = await supabase
     .from('tickets')
-    .update({ pdf_url: pdfUrl })
+    .update({ qr_code_data: qrCodeData })
     .eq('id', ticketId)
     .select()
     .single();
