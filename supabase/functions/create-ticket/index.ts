@@ -11,10 +11,25 @@ const corsHeaders = {
 serve(async (req) => {
   console.log('📦 Create-Ticket Request received:', req.method, req.url);
   
-  // Handle CORS
-  if (req.method === "OPTIONS") {
-    console.log('✅ CORS preflight');
-    return new Response("ok", { headers: corsHeaders });
+  // Handle CORS preflight AND OPTIONS
+  if (req.method === "OPTIONS" || req.method === "HEAD") {
+    console.log('✅ CORS preflight/HEAD');
+    return new Response("ok", { 
+      status: 200,
+      headers: corsHeaders 
+    });
+  }
+
+  // Only allow POST
+  if (req.method !== "POST") {
+    console.log('❌ Method not allowed:', req.method);
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { 
+        status: 405, 
+        headers: corsHeaders 
+      }
+    );
   }
 
   try {
@@ -43,7 +58,13 @@ serve(async (req) => {
           error: "Missing required fields",
           received: { teamId, eventId, userId, paymentId, ticketCode },
         }),
-        { status: 400, headers: corsHeaders }
+        { 
+          status: 400, 
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          }
+        }
       );
     }
 
@@ -55,7 +76,13 @@ serve(async (req) => {
       console.error('❌ Missing Supabase configuration');
       return new Response(
         JSON.stringify({ error: "Missing Supabase configuration" }),
-        { status: 500, headers: corsHeaders }
+        { 
+          status: 500, 
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          }
+        }
       );
     }
 
@@ -87,7 +114,13 @@ serve(async (req) => {
           details: error.message,
           code: error.code,
         }),
-        { status: 400, headers: corsHeaders }
+        { 
+          status: 400, 
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          }
+        }
       );
     }
 
@@ -95,7 +128,10 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ success: true, ticket: data }), {
       status: 200,
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   } catch (error) {
     console.error('❌ Function error:', error);
@@ -104,7 +140,13 @@ serve(async (req) => {
         error: "Internal server error",
         message: error instanceof Error ? error.message : String(error),
       }),
-      { status: 500, headers: corsHeaders }
+      { 
+        status: 500, 
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        }
+      }
     );
   }
 }, {
