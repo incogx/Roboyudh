@@ -867,39 +867,30 @@ export async function createTicket(
   ticketCode: string
 ): Promise<Ticket> {
   try {
-    // Get current session for auth
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || '';
+    console.log('🎫 createTicket called with:', { teamId, eventId, userId, paymentId, ticketCode });
 
-    // Construct edge function URL
-    const supabaseUrl = 'https://kbwntymxockacgzfabys.supabase.co';
-    const functionUrl = `${supabaseUrl}/functions/v1/create-ticket`;
+    // Direct database insert - simpler and more reliable than edge function
+    const { data, error } = await supabase
+      .from('tickets')
+      .insert([{
+        team_id: teamId,
+        event_id: eventId,
+        user_id: userId,
+        payment_id: paymentId,
+        ticket_code: ticketCode,
+        qr_code_data: null,
+        pdf_url: null,
+      }])
+      .select()
+      .single();
 
-    // Call edge function which uses service role key to insert ticket
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        teamId,
-        eventId,
-        userId,
-        paymentId,
-        ticketCode,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(
-        `Ticket creation failed: ${error.details || error.error || response.statusText}`
-      );
+    if (error) {
+      console.error('❌ Ticket creation error:', error);
+      throw new Error(`Ticket creation failed: ${error.message}`);
     }
 
-    const { ticket } = await response.json();
-    return ticket;
+    console.log('✅ Ticket created successfully!', data);
+    return data;
   } catch (error) {
     throw new Error(
       `Failed to create ticket: ${error instanceof Error ? error.message : 'Unknown error'}`
