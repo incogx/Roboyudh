@@ -878,8 +878,7 @@ export async function createTicket(
         user_id: userId,
         payment_id: paymentId,
         ticket_code: ticketCode,
-        qr_code_data: null,
-        pdf_url: null,
+        ticket_pdf_url: null,
       }])
       .select()
       .single();
