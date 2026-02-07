@@ -11,6 +11,27 @@ const EventCard = ({ event }: EventCardProps) => {
   const isTech = event.category === 'tech';
   const { user } = useAuth();
 
+  const normalizedEventName = event.name.replace(/\s+/g, '').toLowerCase();
+
+  const getDetailsPath = () => {
+    switch (normalizedEventName) {
+      case 'rcracing':
+        return '/details/rc-racing';
+      case 'robosumo':
+        return '/details/robo-sumo';
+      case 'obstaclerun':
+        return '/details/obstacle-run';
+      case 'robosoccer':
+        return '/details/robo-soccer';
+      case 'gameverse':
+        return '/details/game-verse';
+      case 'linefollower':
+        return '/details/line-follower';
+      default:
+        return `/events/${event.id}`;
+    }
+  };
+
   const handleRegisterClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!user) {
       e.preventDefault();
@@ -86,15 +107,7 @@ const EventCard = ({ event }: EventCardProps) => {
             Register Now
           </Link>
           <Link 
-            to={
-              event.name === 'RC Racing' ? '/details/rc-racing' :
-              event.name === 'Robo Sumo' ? '/details/robo-sumo' :
-              event.name === 'Obstacle Run' ? '/details/obstacle-run' :
-              event.name === 'Robo Soccer' ? '/details/robo-soccer' :
-              event.name === 'Game Verse' ? '/details/game-verse' :
-              event.name === 'Line Follower' ? '/details/line-follower' :
-              '/events/' + event.id
-            }
+            to={getDetailsPath()}
             className="px-4 py-3 border border-cyan-500/30 text-cyan-400 font-semibold rounded-lg hover:bg-cyan-500/10 hover:border-cyan-400/50 transition-all duration-300"
           >
             Details

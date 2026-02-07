@@ -10,6 +10,7 @@ import {
   createLeaderboardEntry,
   createOnSpotRegistration,
   fetchTeamMembers,
+  fetchAllRegistrationDetails,
   fetchRegistrationDetails,
   approvePayment,
   rejectPayment,
@@ -267,6 +268,11 @@ const Admin = () => {
   const handleExportCSV = async () => {
     try {
       const filteredTeams = getFilteredTeams();
+
+      const allRegistrationDetails = await fetchAllRegistrationDetails();
+      const detailsByTeamId = new Map(
+        allRegistrationDetails.map(details => [details.team_id, details])
+      );
       
       // Load all team members for filtered teams
       const teamsWithMembers = await Promise.all(
@@ -276,7 +282,7 @@ const Admin = () => {
           const event = events.find(e => e.id === team.event_id);
           // ✅ SECURITY: Always fetch registration details from Supabase (RLS enforced)
           // ✅ No reliance on insecure localStorage
-          const extendedData = teamDetails[team.id] || null;
+          const extendedData = teamDetails[team.id] || detailsByTeamId.get(team.id) || null;
           
           return {
             team,
@@ -297,6 +303,14 @@ const Admin = () => {
         'Team Size',
         'Team Leader',
         'Member Names',
+        'Member Emails',
+        'Member Phones',
+        'Member Genders',
+        'Member Departments',
+        'Member Years',
+        'Member Colleges',
+        'Member Cities',
+        'Member States',
         'Full Name',
         'Gender',
         'Mobile Number',
@@ -313,6 +327,14 @@ const Admin = () => {
       // CSV Rows
       const rows = teamsWithMembers.map(({ team, members, payment, event, extendedData }) => {
         const memberNames = members.map(m => m.member_name).join('; ');
+        const memberEmails = members.map(m => m.member_email).filter(Boolean).join('; ');
+        const memberPhones = members.map(m => m.member_phone).filter(Boolean).join('; ');
+        const memberGenders = members.map(m => m.gender).filter(Boolean).join('; ');
+        const memberDepartments = members.map(m => m.department).filter(Boolean).join('; ');
+        const memberYears = members.map(m => m.year_of_study).filter(Boolean).join('; ');
+        const memberColleges = members.map(m => m.college).filter(Boolean).join('; ');
+        const memberCities = members.map(m => m.city).filter(Boolean).join('; ');
+        const memberStates = members.map(m => m.state).filter(Boolean).join('; ');
         
         return [
           team.team_name,
@@ -322,6 +344,14 @@ const Admin = () => {
           team.team_size,
           extendedData?.team_leader_name || 'N/A',
           memberNames || 'N/A',
+          memberEmails || 'N/A',
+          memberPhones || 'N/A',
+          memberGenders || 'N/A',
+          memberDepartments || 'N/A',
+          memberYears || 'N/A',
+          memberColleges || 'N/A',
+          memberCities || 'N/A',
+          memberStates || 'N/A',
           extendedData?.full_name || 'N/A',
           extendedData?.gender || 'N/A',
           extendedData?.mobile_number || 'N/A',
